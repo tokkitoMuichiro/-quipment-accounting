@@ -8,6 +8,7 @@
       </template>
     </PageHeader>
     <p v-if="error" class="alert">{{ error }}</p>
+    <p v-if="loading" class="muted">Загрузка…</p>
     <div class="card table-wrap stack-on-mobile">
       <table v-if="warehouses.length">
         <thead>
@@ -74,7 +75,9 @@
         </div>
         <div class="modal__actions">
           <button type="button" class="btn btn--ghost" @click="showForm = false">Отмена</button>
-          <button class="btn btn--accent">Сохранить</button>
+          <button class="btn btn--accent" :disabled="saving">
+            {{ saving ? 'Сохранение…' : 'Сохранить' }}
+          </button>
         </div>
       </form>
     </AppModal>
@@ -93,12 +96,19 @@ const auth = useAuthStore();
 const warehouses = ref([]);
 const users = ref([]);
 const error = ref('');
+const loading = ref(false);
+const saving = ref(false);
 const showForm = ref(false);
 const form = reactive({ id: '', name: '', address: '', keeperIds: [], isSystem: false });
 
 async function load() {
-  warehouses.value = await fetchWarehouses();
-  users.value = await fetchUsers();
+  loading.value = true;
+  try {
+    warehouses.value = await fetchWarehouses();
+    users.value = await fetchUsers();
+  } finally {
+    loading.value = false;
+  }
 }
 
 function openForm(w) {
@@ -121,18 +131,26 @@ async function removeWarehouse(w) {
 }
 
 async function save() {
+  saving.value = true;
+  error.value = '';
   const payload = {
     name: form.name,
     address: form.address,
     keeperIds: form.keeperIds,
   };
-  if (form.id) {
-    await api(`/warehouses/${form.id}`, { method: 'PATCH', body: payload });
-  } else {
-    await api('/warehouses', { method: 'POST', body: payload });
+  try {
+    if (form.id) {
+      await api(`/warehouses/${form.id}`, { method: 'PATCH', body: payload });
+    } else {
+      await api('/warehouses', { method: 'POST', body: payload });
+    }
+    showForm.value = false;
+    await load();
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    saving.value = false;
   }
-  showForm.value = false;
-  await load();
 }
 
 onMounted(async () => {

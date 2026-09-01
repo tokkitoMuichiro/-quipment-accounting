@@ -15,6 +15,8 @@ import { ExcelService } from '../excel/excel.service';
 import {
   AuthUser,
   canActOnItem,
+  canDeleteItem,
+  canEditDocuments,
   canTransferFrom,
   isWarehouseKeeper,
   keeperWarehouseIds,
@@ -101,24 +103,6 @@ export class EquipmentService {
       return this.normalizeConditionNote(nextCondition, dto.conditionNote);
     }
     return item.conditionNote;
-  }
-
-  private canManageItem(user: AuthUser, item: Equipment) {
-    const perms = rolePermissions(user);
-    if (hasPermission(perms, 'edit') || hasPermission(perms, 'view_all')) {
-      return hasPermission(perms, 'edit') || hasPermission(perms, 'delete');
-    }
-    if (item.ownerType === 'USER' && item.ownerUserId === user.id) {
-      return true;
-    }
-    if (
-      item.ownerType === 'WAREHOUSE' &&
-      item.ownerWarehouseId &&
-      isWarehouseKeeper(user, item.ownerWarehouseId)
-    ) {
-      return true;
-    }
-    return false;
   }
 
   private assertCanCreateFor(user: AuthUser, dto: CreateEquipmentDto) {
@@ -322,6 +306,11 @@ export class EquipmentService {
         );
       }
     }
+    if (wantsDocs && !canEditDocuments(user, item)) {
+      throw new ForbiddenException(
+        'Паспорта и сертификаты можно отмечать только у своего оборудования или на своей базе',
+      );
+    }
     if (!wantsCard && !wantsCondition && !wantsDocs) {
       return item;
     }
@@ -330,7 +319,7 @@ export class EquipmentService {
       throw new BadRequestException('Серийная единица всегда 1 шт.');
     }
     if (item.type === 'CONSUMABLE' && dto.factoryNumber) {
-      throw new BadRequestException('У расходников нет заводского номера');
+      throw new BadRequestException('У неномерного оборудования нет заводского номера');
     }
 
     const nextCondition = dto.condition ?? item.condition;
@@ -339,38 +328,46 @@ export class EquipmentService {
       : undefined;
 
     try {
-      const updated = await this.prisma.equipment.update({
-        where: { id },
-        data: {
-          name: canFullEdit ? dto.name?.trim() : undefined,
-          factoryNumber:
-            !canFullEdit || dto.factoryNumber === undefined
-              ? undefined
-              : dto.factoryNumber.trim() || null,
-          quantity: canFullEdit ? dto.quantity : undefined,
-          condition: wantsCondition ? nextCondition : undefined,
-          conditionNote,
-          hasDocuments: wantsDocs ? dto.hasDocuments : undefined,
-        },
-        include: includeOwner,
+      const resultId = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.equipment.update({
+          where: { id },
+          data: {
+            name: canFullEdit ? dto.name?.trim() : undefined,
+            factoryNumber:
+              !canFullEdit || dto.factoryNumber === undefined
+                ? undefined
+                : dto.factoryNumber.trim() || null,
+            quantity: canFullEdit ? dto.quantity : undefined,
+            condition: wantsCondition ? nextCondition : undefined,
+            conditionNote,
+            hasDocuments: wantsDocs ? dto.hasDocuments : undefined,
+          },
+        });
+
+        if (wantsCondition && nextCondition === 'IN_REPAIR') {
+          const repair = await this.ensureRepairWarehouseTx(tx);
+          if (updated.ownerWarehouseId !== repair.id) {
+            return this.transferInTx(
+              tx,
+              updated.id,
+              {
+                toOwnerType: 'WAREHOUSE',
+                toWarehouseId: repair.id,
+              },
+              user,
+              { systemRepairMove: true },
+            );
+          }
+        }
+
+        return updated.id;
       });
 
-      if (wantsCondition && nextCondition === 'IN_REPAIR') {
-        const repair = await this.ensureRepairWarehouse();
-        if (updated.ownerWarehouseId !== repair.id) {
-          return this.transfer(
-            updated.id,
-            {
-              toOwnerType: 'WAREHOUSE',
-              toWarehouseId: repair.id,
-            },
-            user,
-          );
-        }
-      }
-
       this.excel.scheduleSync();
-      return updated;
+      return this.prisma.equipment.findUnique({
+        where: { id: resultId },
+        include: includeOwner,
+      });
     } catch (error: any) {
       if (error?.code === 'P2002') {
         throw new BadRequestException('Заводской номер уже есть в учёте');
@@ -381,8 +378,10 @@ export class EquipmentService {
 
   async remove(id: string, user: AuthUser) {
     const item = await this.get(id, user);
-    if (!hasPermission(rolePermissions(user), 'delete')) {
-      throw new ForbiddenException('Нет права удалять');
+    if (!canDeleteItem(user, item)) {
+      throw new ForbiddenException(
+        'Можно удалять только своё оборудование или оборудование своей базы',
+      );
     }
     await this.prisma.equipment.delete({ where: { id } });
     this.excel.scheduleSync();
@@ -394,8 +393,48 @@ export class EquipmentService {
       throw new ForbiddenException('Нет права передавать');
     }
 
-    const item = await this.get(id, user);
-    this.assertCanTransferFrom(user, item);
+    const resultId = await this.prisma.$transaction((tx) =>
+      this.transferInTx(tx, id, dto, user),
+    );
+
+    this.excel.scheduleSync();
+    return this.prisma.equipment.findUnique({
+      where: { id: resultId },
+      include: includeOwner,
+    });
+  }
+
+  private async ensureRepairWarehouseTx(tx: Prisma.TransactionClient) {
+    const existing = await tx.warehouse.findUnique({
+      where: { slug: REPAIR_WAREHOUSE_SLUG },
+    });
+    if (existing) {
+      return existing;
+    }
+    return tx.warehouse.create({
+      data: {
+        name: REPAIR_WAREHOUSE_NAME,
+        slug: REPAIR_WAREHOUSE_SLUG,
+        isSystem: true,
+      },
+    });
+  }
+
+  private async transferInTx(
+    tx: Prisma.TransactionClient,
+    id: string,
+    dto: TransferEquipmentDto,
+    user: AuthUser,
+    options?: { systemRepairMove?: boolean },
+  ) {
+    const item = await tx.equipment.findUnique({ where: { id } });
+    if (!item) {
+      throw new NotFoundException('Оборудование не найдено');
+    }
+
+    if (!options?.systemRepairMove) {
+      this.assertCanTransferFrom(user, item);
+    }
 
     if (dto.toOwnerType === 'USER' && !dto.toUserId) {
       throw new BadRequestException('Укажите получателя');
@@ -417,121 +456,131 @@ export class EquipmentService {
     }
 
     const qty =
-      item.type === 'SERIAL' ? 1 : dto.quantity && dto.quantity > 0 ? dto.quantity : item.quantity;
+      item.type === 'SERIAL'
+        ? 1
+        : dto.quantity && dto.quantity > 0
+          ? dto.quantity
+          : item.quantity;
 
     if (qty > item.quantity) {
       throw new BadRequestException('Недостаточно количества');
     }
 
-    const fromLabel = await this.ownerLabel(
+    const fromLabel = await this.ownerLabelTx(
+      tx,
       item.ownerType,
       item.ownerUserId,
       item.ownerWarehouseId,
     );
-    const toLabel = await this.ownerLabel(
+    const toLabel = await this.ownerLabelTx(
+      tx,
       dto.toOwnerType,
       dto.toUserId,
       dto.toWarehouseId,
     );
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      let remainingId = item.id;
+    let remainingId = item.id;
 
-      if (item.type === 'SERIAL' || qty === item.quantity) {
-        const dest = await this.findConsumableLotTx(
-          tx,
-          item.name,
-          item.condition,
-          dto.toOwnerType,
-          dto.toUserId,
-          dto.toWarehouseId,
-          item.id,
-        );
+    if (item.type === 'SERIAL' || qty === item.quantity) {
+      const dest = await this.findConsumableLotTx(
+        tx,
+        item.name,
+        item.condition,
+        dto.toOwnerType,
+        dto.toUserId,
+        dto.toWarehouseId,
+        item.id,
+      );
 
-        if (item.type === 'CONSUMABLE' && dest) {
-          await tx.equipment.update({
-            where: { id: dest.id },
-            data: { quantity: { increment: qty } },
-          });
-          await tx.equipment.delete({ where: { id: item.id } });
-          remainingId = dest.id;
-        } else {
-          await tx.equipment.update({
-            where: { id: item.id },
-            data: {
-              ownerType: dto.toOwnerType,
-              ownerUserId: dto.toOwnerType === 'USER' ? dto.toUserId : null,
-              ownerWarehouseId:
-                dto.toOwnerType === 'WAREHOUSE' ? dto.toWarehouseId : null,
-            },
-          });
-        }
-      } else {
-        await tx.equipment.update({
-          where: { id: item.id },
-          data: { quantity: { decrement: qty } },
+      if (item.type === 'CONSUMABLE' && dest) {
+        const moved = await tx.equipment.deleteMany({
+          where: { id: item.id, quantity: qty },
         });
-
-        const dest = await this.findConsumableLotTx(
-          tx,
-          item.name,
-          item.condition,
-          dto.toOwnerType,
-          dto.toUserId,
-          dto.toWarehouseId,
-        );
-
-        if (dest) {
-          await tx.equipment.update({
-            where: { id: dest.id },
-            data: { quantity: { increment: qty } },
-          });
-          remainingId = dest.id;
-        } else {
-          const created = await tx.equipment.create({
-            data: {
-              name: item.name,
-              type: 'CONSUMABLE',
-              factoryNumber: null,
-              quantity: qty,
-              condition: item.condition,
-              conditionNote: item.conditionNote,
-              ownerType: dto.toOwnerType,
-              ownerUserId: dto.toOwnerType === 'USER' ? dto.toUserId : null,
-              ownerWarehouseId:
-                dto.toOwnerType === 'WAREHOUSE' ? dto.toWarehouseId : null,
-            },
-          });
-          remainingId = created.id;
+        if (moved.count !== 1) {
+          throw new BadRequestException('Недостаточно количества');
+        }
+        await tx.equipment.update({
+          where: { id: dest.id },
+          data: { quantity: { increment: qty } },
+        });
+        remainingId = dest.id;
+      } else {
+        const moved = await tx.equipment.updateMany({
+          where: { id: item.id, quantity: item.quantity },
+          data: {
+            ownerType: dto.toOwnerType,
+            ownerUserId: dto.toOwnerType === 'USER' ? dto.toUserId : null,
+            ownerWarehouseId:
+              dto.toOwnerType === 'WAREHOUSE' ? dto.toWarehouseId : null,
+          },
+        });
+        if (moved.count !== 1) {
+          throw new BadRequestException('Недостаточно количества');
         }
       }
-
-      await tx.transfer.create({
-        data: {
-          equipmentId: remainingId,
-          equipmentName: item.name,
-          factoryNumber: item.factoryNumber,
-          quantity: qty,
-          fromOwnerType: item.ownerType,
-          fromUserId: item.ownerUserId,
-          fromWarehouseId: item.ownerWarehouseId,
-          fromLabel,
-          toOwnerType: dto.toOwnerType,
-          toUserId: dto.toUserId || null,
-          toWarehouseId: dto.toWarehouseId || null,
-          toLabel,
-          actorUserId: user.id,
-        },
+    } else {
+      const decremented = await tx.equipment.updateMany({
+        where: { id: item.id, quantity: { gte: qty } },
+        data: { quantity: { decrement: qty } },
       });
+      if (decremented.count !== 1) {
+        throw new BadRequestException('Недостаточно количества');
+      }
 
-      return remainingId;
+      const dest = await this.findConsumableLotTx(
+        tx,
+        item.name,
+        item.condition,
+        dto.toOwnerType,
+        dto.toUserId,
+        dto.toWarehouseId,
+      );
+
+      if (dest) {
+        await tx.equipment.update({
+          where: { id: dest.id },
+          data: { quantity: { increment: qty } },
+        });
+        remainingId = dest.id;
+      } else {
+        const created = await tx.equipment.create({
+          data: {
+            name: item.name,
+            type: 'CONSUMABLE',
+            factoryNumber: null,
+            quantity: qty,
+            condition: item.condition,
+            conditionNote: item.conditionNote,
+            hasDocuments: item.hasDocuments,
+            ownerType: dto.toOwnerType,
+            ownerUserId: dto.toOwnerType === 'USER' ? dto.toUserId : null,
+            ownerWarehouseId:
+              dto.toOwnerType === 'WAREHOUSE' ? dto.toWarehouseId : null,
+          },
+        });
+        remainingId = created.id;
+      }
+    }
+
+    await tx.transfer.create({
+      data: {
+        equipmentId: remainingId,
+        equipmentName: item.name,
+        factoryNumber: item.factoryNumber,
+        quantity: qty,
+        fromOwnerType: item.ownerType,
+        fromUserId: item.ownerUserId,
+        fromWarehouseId: item.ownerWarehouseId,
+        fromLabel,
+        toOwnerType: dto.toOwnerType,
+        toUserId: dto.toUserId || null,
+        toWarehouseId: dto.toWarehouseId || null,
+        toLabel,
+        actorUserId: user.id,
+      },
     });
 
-    this.excel.scheduleSync();
-    return this.prisma.equipment.findUnique({
-      where: { id: result },
-      include: includeOwner,
-    });
+    return remainingId;
   }
 
   async bulkTransfer(dto: BulkTransferDto, user: AuthUser) {
@@ -568,19 +617,20 @@ export class EquipmentService {
     );
   }
 
-  private async ownerLabel(
+  private async ownerLabelTx(
+    tx: Prisma.TransactionClient,
     type: OwnerType,
     userId?: string | null,
     warehouseId?: string | null,
   ) {
     if (type === 'USER') {
       const u = userId
-        ? await this.prisma.user.findUnique({ where: { id: userId } })
+        ? await tx.user.findUnique({ where: { id: userId } })
         : null;
       return u?.fullName || 'Сотрудник';
     }
     const w = warehouseId
-      ? await this.prisma.warehouse.findUnique({ where: { id: warehouseId } })
+      ? await tx.warehouse.findUnique({ where: { id: warehouseId } })
       : null;
     return w ? `База: ${w.name}` : 'Производственная база';
   }

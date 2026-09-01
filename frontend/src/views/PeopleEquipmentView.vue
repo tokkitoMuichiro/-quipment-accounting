@@ -16,15 +16,15 @@
       />
       <select v-model="condition" :disabled="!userId">
         <option value="">Все состояния</option>
-        <option value="OK">Исправное</option>
-        <option value="NEEDS_REPAIR">Требует ремонта</option>
-        <option value="IN_REPAIR">В ремонте</option>
-        <option value="IRREPARABLE">Не подлежит ремонту</option>
+        <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </option>
       </select>
     </div>
     <p v-if="error" class="alert">{{ error }}</p>
+    <p v-if="loading" class="muted">Загрузка…</p>
     <EquipmentBoard
-      v-if="userId"
+      v-if="userId && !loading"
       :items="filtered"
       :selectable="canSelect"
       :is-selected="isSelected"
@@ -37,7 +37,7 @@
       @toggle-all="toggleAll"
       @updated="load"
     />
-    <p v-else class="empty card">Выберите сотрудника, чтобы открыть его список.</p>
+    <p v-if="!userId" class="empty card">Выберите сотрудника, чтобы открыть его список.</p>
     <SelectionBar
       :count="selectedItems.length"
       :can-transfer="canTransferSelected"
@@ -63,10 +63,11 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchUsers } from '../api/catalog';
-import { api } from '../api/client';
+import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
 import { useSelection } from '../composables/useSelection';
 import { canTransferItem } from '../utils/access';
+import { CONDITION_OPTIONS } from '../utils/format';
 import PageHeader from '../components/ui/PageHeader.vue';
 import SelectionBar from '../components/ui/SelectionBar.vue';
 import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
@@ -81,6 +82,7 @@ const items = ref([]);
 const query = ref('');
 const condition = ref('');
 const error = ref('');
+const loading = ref(false);
 const userId = ref(route.query.userId || '');
 const editItem = ref(null);
 const transferItems = ref([]);
@@ -116,21 +118,31 @@ async function loadUsers() {
 async function load() {
   if (!userId.value) {
     items.value = [];
+    loading.value = false;
     return;
   }
   error.value = '';
+  loading.value = true;
   try {
-    items.value = await api(`/equipment?ownerUserId=${encodeURIComponent(userId.value)}`);
+    items.value = await fetchEquipment(
+      `?ownerUserId=${encodeURIComponent(userId.value)}`,
+    );
   } catch (e) {
     error.value = e.message;
     items.value = [];
+  } finally {
+    loading.value = false;
   }
 }
 
 async function removeItem(item) {
   if (!confirm(`Удалить «${item.name}» из учёта?`)) return;
-  await api(`/equipment/${item.id}`, { method: 'DELETE' });
-  await load();
+  try {
+    await removeEquipment(item.id);
+    await load();
+  } catch (e) {
+    error.value = e.message;
+  }
 }
 
 function openTransfer(list) {

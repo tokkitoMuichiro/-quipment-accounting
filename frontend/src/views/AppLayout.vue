@@ -32,8 +32,7 @@ const downloading = ref(false);
 const syncMsg = ref('');
 
 function logout() {
-  auth.logout();
-  router.push('/login');
+  auth.logout().then(() => router.push('/login'));
 }
 
 async function downloadLocal() {

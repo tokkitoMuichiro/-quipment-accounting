@@ -40,7 +40,9 @@
         </div>
         <div class="modal__actions">
           <button type="button" class="btn btn--ghost" @click="show = false">Отмена</button>
-          <button class="btn btn--accent">Сохранить</button>
+          <button class="btn btn--accent" :disabled="saving">
+            {{ saving ? 'Сохранение…' : 'Сохранить' }}
+          </button>
         </div>
       </form>
     </AppModal>
@@ -50,6 +52,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import { api } from '../api/client';
+import { fetchRoleCatalog, fetchRoles } from '../api/catalog';
 import PageHeader from '../components/ui/PageHeader.vue';
 import AppModal from '../components/ui/AppModal.vue';
 import './styles/AdminRolesView.scss';
@@ -58,6 +61,7 @@ const roles = ref([]);
 const catalog = ref([]);
 const error = ref('');
 const show = ref(false);
+const saving = ref(false);
 const form = reactive({ id: '', name: '', permissions: [] });
 
 function labelOf(key) {
@@ -65,8 +69,8 @@ function labelOf(key) {
 }
 
 async function load() {
-  catalog.value = await api('/roles/catalog');
-  roles.value = await api('/roles');
+  catalog.value = await fetchRoleCatalog();
+  roles.value = await fetchRoles();
 }
 
 function openCreate() {
@@ -84,19 +88,27 @@ function openEdit(role) {
 }
 
 async function save() {
-  if (form.id) {
-    await api(`/roles/${form.id}`, {
-      method: 'PATCH',
-      body: { name: form.name, permissions: form.permissions },
-    });
-  } else {
-    await api('/roles', {
-      method: 'POST',
-      body: { name: form.name, permissions: form.permissions },
-    });
+  saving.value = true;
+  error.value = '';
+  try {
+    if (form.id) {
+      await api(`/roles/${form.id}`, {
+        method: 'PATCH',
+        body: { name: form.name, permissions: form.permissions },
+      });
+    } else {
+      await api('/roles', {
+        method: 'POST',
+        body: { name: form.name, permissions: form.permissions },
+      });
+    }
+    show.value = false;
+    await load();
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    saving.value = false;
   }
-  show.value = false;
-  await load();
 }
 
 onMounted(async () => {

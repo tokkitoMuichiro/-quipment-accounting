@@ -6,6 +6,7 @@
       </template>
     </PageHeader>
     <p v-if="error" class="alert">{{ error }}</p>
+    <p v-if="loading" class="muted">Загрузка…</p>
     <div class="card table-wrap stack-on-mobile">
       <table>
         <thead>
@@ -37,21 +38,28 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { api } from '../api/client';
+import { fetchEmployees } from '../api/catalog';
 import PageHeader from '../components/ui/PageHeader.vue';
 
 const users = ref([]);
 const roles = ref([]);
 const error = ref('');
+const loading = ref(false);
 
 async function load() {
-  roles.value = await api('/roles');
-  users.value = await api('/users');
+  loading.value = true;
+  try {
+    roles.value = await api('/roles');
+    users.value = await api('/users');
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function syncEmployees() {
   error.value = '';
   try {
-    await api('/bitrix/employees');
+    await fetchEmployees();
     await load();
   } catch (e) {
     error.value = e.message;

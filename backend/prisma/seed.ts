@@ -18,7 +18,7 @@ const ALL_PERMISSIONS = [
 async function main() {
   await prisma.role.upsert({
     where: { slug: 'admin' },
-    update: { permissions: ALL_PERMISSIONS },
+    update: { name: 'Администратор', isSystem: true },
     create: {
       name: 'Администратор',
       slug: 'admin',
@@ -29,9 +29,7 @@ async function main() {
 
   await prisma.role.upsert({
     where: { slug: 'master' },
-    update: {
-      permissions: ['view_own', 'create', 'transfer', 'edit_condition'],
-    },
+    update: { name: 'Мастер', isSystem: true },
     create: {
       name: 'Мастер',
       slug: 'master',
@@ -42,16 +40,7 @@ async function main() {
 
   await prisma.role.upsert({
     where: { slug: 'keeper' },
-    update: {
-      permissions: [
-        'view_own',
-        'view_all',
-        'create',
-        'edit_condition',
-        'transfer',
-        'manage_warehouses',
-      ],
-    },
+    update: { name: 'Кладовщик', isSystem: true },
     create: {
       name: 'Кладовщик',
       slug: 'keeper',

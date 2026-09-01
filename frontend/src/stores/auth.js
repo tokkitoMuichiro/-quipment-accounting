@@ -22,16 +22,12 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async fetchMe() {
-      if (!getToken()) {
-        this.user = null;
-        return null;
-      }
       this.loading = true;
       try {
         this.user = await api('/auth/me');
         this.error = '';
         return this.user;
-      } catch (e) {
+      } catch {
         this.user = null;
         setToken(null);
         return null;
@@ -49,7 +45,12 @@ export const useAuthStore = defineStore('auth', {
       this.user = data.user;
       return data.user;
     },
-    logout() {
+    async logout() {
+      try {
+        await api('/auth/logout', { method: 'POST' });
+      } catch {
+        // cookie may already be gone
+      }
       setToken(null);
       this.user = null;
     },

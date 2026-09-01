@@ -47,6 +47,7 @@
               class="checkbox"
               type="checkbox"
               :checked="Boolean(item.hasDocuments)"
+              :disabled="!canEditDocs(item)"
               title="Паспорта и сертификаты"
               :aria-label="`Паспорта и сертификаты: ${item.name}`"
               @click.stop
@@ -75,9 +76,9 @@
                 Передать
               </button>
               <IconActions
-                v-if="can('edit') || can('delete')"
+                v-if="can('edit') || canDelete(item)"
                 :can-edit="can('edit')"
-                :can-delete="can('delete')"
+                :can-delete="canDelete(item)"
                 @edit="$emit('edit', item)"
                 @remove="$emit('remove', item)"
               />
@@ -97,7 +98,7 @@ import './styles/EquipmentTable.scss';
 import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
 import { ownerLabel, typeLabel } from '../../utils/format';
-import { canTransferItem, canChangeConditionItem } from '../../utils/access';
+import { canTransferItem, canChangeConditionItem, canEditDocumentsItem, canDeleteItem } from '../../utils/access';
 
 defineProps({
   items: { type: Array, default: () => [] },
@@ -114,4 +115,6 @@ const auth = useAuthStore();
 const can = auth.can;
 const canTransfer = (item) => canTransferItem(auth, item);
 const canChange = (item) => canChangeConditionItem(auth, item);
+const canEditDocs = (item) => canEditDocumentsItem(auth, item);
+const canDelete = (item) => canDeleteItem(auth, item);
 </script>

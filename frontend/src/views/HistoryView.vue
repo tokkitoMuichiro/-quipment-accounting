@@ -2,6 +2,7 @@
   <section>
     <PageHeader title="История передач" subtitle="Журнал перемещений между мастерами и производственными базами" />
     <p v-if="error" class="alert">{{ error }}</p>
+    <p v-if="loading" class="muted">Загрузка…</p>
     <div class="card table-wrap stack-on-mobile history-table-wrap">
       <table v-if="rows.length" class="history-table">
         <thead>
@@ -42,12 +43,16 @@ import './styles/HistoryView.scss';
 
 const rows = ref([]);
 const error = ref('');
+const loading = ref(false);
 
 onMounted(async () => {
+  loading.value = true;
   try {
     rows.value = await fetchTransfers();
   } catch (e) {
     error.value = e.message;
+  } finally {
+    loading.value = false;
   }
 });
 </script>

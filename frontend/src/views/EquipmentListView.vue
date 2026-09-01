@@ -9,16 +9,17 @@
       <input v-model="query" placeholder="Поиск по названию или номеру" />
       <select v-model="condition">
         <option value="">Все состояния</option>
-        <option value="OK">Исправное</option>
-        <option value="NEEDS_REPAIR">Требует ремонта</option>
-        <option value="IN_REPAIR">В ремонте</option>
-        <option value="IRREPARABLE">Не подлежит ремонту</option>
+        <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </option>
       </select>
     </div>
     <p v-if="error" class="alert">{{ error }}</p>
+    <p v-if="loading" class="muted">Загрузка…</p>
     <EquipmentBoard
+      v-if="!loading"
       :items="filtered"
-      selectable
+      :selectable="canSelect"
       :is-selected="isSelected"
       :all-selected="allSelected"
       :some-selected="someSelected"
@@ -61,6 +62,7 @@ import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
 import EquipmentForm from '../components/equipment/EquipmentForm.vue';
 import TransferModal from '../components/equipment/TransferModal.vue';
 import { canTransferItem } from '../utils/access';
+import { CONDITION_OPTIONS } from '../utils/format';
 
 const route = useRoute();
 const scope = computed(() => route.meta.scope || 'mine');
@@ -70,6 +72,7 @@ const {
   query,
   condition,
   error,
+  loading,
   load,
   removeItem,
 } = useEquipmentList({ scopeRef: scope });
@@ -89,6 +92,7 @@ const editItem = ref(null);
 const transferItems = ref([]);
 
 const title = computed(() => route.meta.title || 'Оборудование');
+const canSelect = computed(() => filtered.value.some((item) => canTransferItem(auth, item)));
 const canTransferSelected = computed(
   () => selectedItems.value.length > 0 && selectedItems.value.every((item) => canTransferItem(auth, item)),
 );

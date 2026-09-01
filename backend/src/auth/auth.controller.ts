@@ -4,14 +4,18 @@ import {
   ForbiddenException,
   Get,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { IsOptional, IsString, MinLength } from 'class-validator';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { AuthUser } from '../common/auth-user';
+import { isProductionEnv } from './jwt-secret';
 
 class DevLoginDto {
   @IsString()
@@ -37,8 +41,12 @@ export class AuthController {
   }
 
   @Post('dev-login')
-  async devLogin(@Body() dto: DevLoginDto) {
-    if (this.config.get('DEV_AUTH') !== 'true') {
+  @Throttle({ default: { limit: 8, ttl: 60000 } })
+  async devLogin(
+    @Body() dto: DevLoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (this.config.get('DEV_AUTH') !== 'true' || isProductionEnv(this.config)) {
       throw new ForbiddenException('Локальный вход выключен');
     }
 
@@ -49,9 +57,17 @@ export class AuthController {
       email: dto.email ?? null,
     });
 
+    const token = this.auth.signToken(user.id);
+    this.auth.setAuthCookie(res, token);
     return {
-      token: this.auth.signToken(user.id),
+      token,
       user: this.auth.serialize(user),
     };
+  }
+
+  @Post('logout')
+  logout(@Res({ passthrough: true }) res: Response) {
+    this.auth.clearAuthCookie(res);
+    return { ok: true };
   }
 }

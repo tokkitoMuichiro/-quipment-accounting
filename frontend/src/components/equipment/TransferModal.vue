@@ -34,7 +34,7 @@
         <input v-model.number="form.quantity" type="number" min="1" :max="list[0].quantity" required />
       </label>
       <p v-else-if="list.length > 1" class="muted">
-        Расходники в массовой передаче уходят целиком.
+        Неномерное в массовой передаче уходит целиком.
       </p>
       <p v-if="error" class="alert">{{ error }}</p>
       <div class="modal__actions">
@@ -51,7 +51,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import './styles/TransferModal.scss';
 import AppModal from '../ui/AppModal.vue';
-import { fetchEmployees, fetchUsers, fetchWarehouses } from '../../api/catalog';
+import { fetchUsers, fetchWarehouses } from '../../api/catalog';
 import { bulkTransferEquipment, transferEquipment } from '../../api/equipment';
 
 const props = defineProps({
@@ -78,11 +78,7 @@ const form = reactive({
 });
 
 onMounted(async () => {
-  try {
-    people.value = await fetchEmployees();
-  } catch {
-    people.value = await fetchUsers();
-  }
+  people.value = await fetchUsers();
   warehouses.value = await fetchWarehouses();
 });
 
