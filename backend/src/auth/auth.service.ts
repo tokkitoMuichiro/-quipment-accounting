@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth-user';
+
+const COOKIE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -14,6 +17,21 @@ export class AuthService {
 
   signToken(userId: string) {
     return this.jwt.sign({ sub: userId });
+  }
+
+  setAuthCookie(res: Response, token: string) {
+    const frontend = this.config.get<string>('FRONTEND_URL') || '';
+    res.cookie('token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: frontend.startsWith('https'),
+      path: '/',
+      maxAge: COOKIE_MAX_AGE_MS,
+    });
+  }
+
+  clearAuthCookie(res: Response) {
+    res.clearCookie('token', { path: '/' });
   }
 
   async loadUser(userId: string): Promise<AuthUser | null> {

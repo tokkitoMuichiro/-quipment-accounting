@@ -7,7 +7,7 @@
     <nav class="nav" @click="$emit('navigate')">
       <router-link to="/mine">Моё оборудование</router-link>
       <router-link to="/people">Оборудование у сотрудников</router-link>
-      <router-link v-if="auth.can('view_all')" to="/fleet">Все оборудование</router-link>
+      <router-link v-if="auth.can('view_all')" to="/fleet">Всё оборудование</router-link>
       <router-link to="/warehouses">Производственные базы</router-link>
       <router-link to="/history">История</router-link>
       <div v-if="auth.can('manage_roles')" class="nav__group">Настройки</div>

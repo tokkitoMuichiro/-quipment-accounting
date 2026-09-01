@@ -1,5 +1,5 @@
 import { computed, onMounted, ref, watch } from 'vue';
-import { api } from '../api/client';
+import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
 
 export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
@@ -28,7 +28,7 @@ export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
       if (scopeRef?.value === 'mine') params.set('scope', 'mine');
       if (warehouseIdRef?.value) params.set('warehouseId', warehouseIdRef.value);
       const qs = params.toString();
-      items.value = await api(`/equipment${qs ? `?${qs}` : ''}`);
+      items.value = await fetchEquipment(qs ? `?${qs}` : '');
     } catch (e) {
       error.value = e.message;
     } finally {
@@ -39,7 +39,7 @@ export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
   async function removeItem(item) {
     if (!confirm(`Удалить «${item.name}» из учёта?`)) return;
     try {
-      await api(`/equipment/${item.id}`, { method: 'DELETE' });
+      await removeEquipment(item.id);
       await load();
     } catch (e) {
       error.value = e.message;

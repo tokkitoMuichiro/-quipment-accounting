@@ -9,7 +9,7 @@
         Тип
         <select v-model="form.type" :disabled="Boolean(item)">
           <option value="SERIAL">Серийное (заводской номер)</option>
-          <option value="CONSUMABLE">Расходник (количество)</option>
+          <option value="CONSUMABLE">Неномерное (количество)</option>
         </select>
       </label>
       <label v-if="form.type === 'SERIAL'">

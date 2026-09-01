@@ -42,6 +42,7 @@ export async function api(path, options = {}) {
   try {
     res = await fetch(`/api${path}`, {
       ...options,
+      credentials: 'include',
       headers,
       body:
         options.body && typeof options.body !== 'string' && !(options.body instanceof FormData)

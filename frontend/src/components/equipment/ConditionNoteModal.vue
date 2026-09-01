@@ -41,6 +41,9 @@ const hint = computed(() => {
   if (props.condition === 'IN_REPAIR') {
     return 'Оборудование будет передано на базу «Ремонт». Укажите причину.';
   }
+  if (props.item.condition === 'IN_REPAIR' && props.condition === 'OK') {
+    return 'Оборудование останется на базе «Ремонт», пока назначенный кладовщик или администратор не передаст его дальше.';
+  }
   if (noteRequired.value) {
     return 'Укажите причину изменения состояния.';
   }

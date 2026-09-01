@@ -23,6 +23,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://equipment:equipment@postgres:5432/equipment
       JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
       PORT: 3000
@@ -35,12 +36,24 @@ services:
       EXCEL_DEBOUNCE_MS: ${EXCEL_DEBOUNCE_MS:-60000}
     ports:
       - "3010:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "8080:80"
 

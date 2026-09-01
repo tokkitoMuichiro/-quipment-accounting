@@ -2,12 +2,16 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm install
+RUN npm ci
 
 COPY . .
-RUN npx prisma generate && npm run build
+RUN npx prisma generate && npm run build \
+  && chown -R node:node /app
+
+USER node
+ENV NODE_ENV=production
 
 EXPOSE 3000
 

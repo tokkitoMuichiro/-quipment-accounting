@@ -35,7 +35,7 @@ export function ownerLabel(item) {
 }
 
 export function typeLabel(item) {
-  return item.type === 'SERIAL' ? 'Серийное' : 'Расходник';
+  return item.type === 'SERIAL' ? 'Серийное' : 'Неномерное';
 }
 
 export function formatDate(value) {

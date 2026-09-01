@@ -8,10 +8,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { BitrixService } from './bitrix.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { RequirePermissions } from '../common/require-permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('bitrix')
@@ -24,6 +27,7 @@ export class BitrixController {
   ) {}
 
   @All('install')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   async install(@Req() req: Request, @Res() res: Response) {
     const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
     await this.bitrix.savePortal(payload);
@@ -41,6 +45,7 @@ export class BitrixController {
   }
 
   @All('open')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   async open(@Req() req: Request, @Res() res: Response) {
     const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
     if (!payload.accessToken || !payload.domain) {
@@ -67,13 +72,15 @@ export class BitrixController {
     });
 
     const token = this.auth.signToken(user.id);
+    this.auth.setAuthCookie(res, token);
     const frontend = this.config.get<string>('FRONTEND_URL') || '/';
     const url = `${frontend.replace(/\/$/, '')}/#token=${encodeURIComponent(token)}`;
     res.redirect(302, url);
   }
 
   @Get('employees')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('manage_roles')
   async employees() {
     const portal = await this.prisma.bitrixPortal.findFirst({
       orderBy: { updatedAt: 'desc' },

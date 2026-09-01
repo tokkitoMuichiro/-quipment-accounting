@@ -49,6 +49,8 @@ import EquipmentCards from './EquipmentCards.vue';
 import ConditionNoteModal from './ConditionNoteModal.vue';
 import './styles/EquipmentBoard.scss';
 import { updateEquipment } from '../../api/equipment';
+import { useAuthStore } from '../../stores/auth';
+import { canEditDocumentsItem } from '../../utils/access';
 
 defineProps({
   items: { type: Array, default: () => [] },
@@ -62,6 +64,7 @@ const emit = defineEmits(['transfer', 'edit', 'remove', 'toggle', 'toggle-all', 
 const pending = ref(null);
 const conditionNonce = ref(0);
 const docsNonce = ref(0);
+const auth = useAuthStore();
 
 function bumpNonce() {
   conditionNonce.value += 1;
@@ -78,6 +81,10 @@ function onConditionChange({ item, condition }) {
 
 async function onDocumentsChange({ item, hasDocuments }) {
   if (!item || Boolean(item.hasDocuments) === Boolean(hasDocuments)) {
+    bumpDocsNonce();
+    return;
+  }
+  if (!canEditDocumentsItem(auth, item)) {
     bumpDocsNonce();
     return;
   }

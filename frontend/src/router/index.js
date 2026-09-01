@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { getToken } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 
 const routes = [
@@ -29,7 +28,7 @@ const routes = [
         path: 'fleet',
         name: 'fleet',
         component: () => import('../views/EquipmentListView.vue'),
-        meta: { scope: 'all', title: 'Все оборудование', perm: 'view_all' },
+        meta: { scope: 'all', title: 'Всё оборудование', perm: 'view_all' },
       },
       {
         path: 'warehouses',
@@ -70,9 +69,6 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (to.meta.public) {
     return true;
-  }
-  if (!getToken()) {
-    return { name: 'login' };
   }
   const auth = useAuthStore();
   if (!auth.user) {

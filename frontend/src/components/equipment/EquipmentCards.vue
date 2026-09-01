@@ -16,7 +16,7 @@
       class="eq-card"
       :class="{
         'is-selected': isSelected(item.id),
-        'eq-card--no-mutate': !(can('edit') || can('delete')),
+        'eq-card--no-mutate': !(can('edit') || canDelete(item)),
       }"
     >
       <div class="eq-card__head">
@@ -33,9 +33,9 @@
           <div class="muted">{{ typeLabel(item) }}</div>
         </div>
         <IconActions
-          v-if="can('edit') || can('delete')"
+          v-if="can('edit') || canDelete(item)"
           :can-edit="can('edit')"
-          :can-delete="can('delete')"
+          :can-delete="canDelete(item)"
           @edit="$emit('edit', item)"
           @remove="$emit('remove', item)"
         />
@@ -49,6 +49,7 @@
             class="checkbox"
             type="checkbox"
             :checked="Boolean(item.hasDocuments)"
+            :disabled="!canEditDocs(item)"
             :aria-label="`Паспорта и сертификаты: ${item.name}`"
             @change="$emit('documents-change', { item, hasDocuments: $event.target.checked })"
           />
@@ -88,7 +89,7 @@ import './styles/EquipmentCards.scss';
 import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
 import { ownerLabel, typeLabel } from '../../utils/format';
-import { canTransferItem, canChangeConditionItem } from '../../utils/access';
+import { canTransferItem, canChangeConditionItem, canEditDocumentsItem, canDeleteItem } from '../../utils/access';
 
 defineProps({
   items: { type: Array, default: () => [] },
@@ -105,4 +106,6 @@ const auth = useAuthStore();
 const can = auth.can;
 const canTransfer = (item) => canTransferItem(auth, item);
 const canChange = (item) => canChangeConditionItem(auth, item);
+const canEditDocs = (item) => canEditDocumentsItem(auth, item);
+const canDelete = (item) => canDeleteItem(auth, item);
 </script>

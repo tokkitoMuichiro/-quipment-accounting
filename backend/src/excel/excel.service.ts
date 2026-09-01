@@ -85,7 +85,7 @@ export class ExcelService implements OnModuleDestroy {
         condition: CONDITION_LABEL[item.condition] || item.condition,
         conditionNote: item.conditionNote || '',
         hasDocuments: item.hasDocuments ? 'Да' : 'Нет',
-        type: item.type === 'SERIAL' ? 'Серийное' : 'Расходник',
+        type: item.type === 'SERIAL' ? 'Серийное' : 'Неномерное',
         owner,
         updatedAt: item.updatedAt.toLocaleString('ru-RU'),
       });
