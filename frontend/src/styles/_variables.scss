@@ -1,0 +1,75 @@
+// Палитра AMMIR (ammir.org)
+$color-midnight: #242d3d;
+$color-midnight-soft: #2e3a4f;
+$color-lavender: #ced9eb;
+$color-white-smoke: #eef0f3;
+$color-paper: #ffffff;
+$color-dodger: #0088ff;
+$color-dodger-deep: #00adee;
+$color-sky: #00b2ff;
+$color-steel: #0088cf;
+$color-steel-muted: #a1adc3;
+$color-ok: #2f6f4e;
+$color-ok-bg: #e4f3ea;
+$color-warn: #c4921a;
+$color-warn-bg: #f8efd2;
+$color-warn-text: #8a6510;
+$color-bad: #9b2f2f;
+$color-bad-bg: #f8e4e4;
+$color-ink: $color-midnight;
+$color-muted: #5d6b80;
+$color-line: #d5deea;
+$color-table-head: #f6f8fb;
+$color-row-hover: #f8fbff;
+$color-row-selected: #eef6ff;
+$color-white: #ffffff;
+
+$font-family: Montserrat, sans-serif;
+$font-size-xs: 11px;
+$font-size-sm: 12px;
+$font-size-md: 13px;
+$font-size-base: 14px;
+$font-size-lg: 22px;
+$font-size-xl: 28px;
+
+$radius: 2px;
+$header-height: 64px;
+$sidebar-width: 280px;
+$sidebar-mobile-width: min(84vw, 300px);
+$control-height: 44px;
+$control-height-sm: 40px;
+$checkbox-size: 20px;
+$bp-mobile: 860px;
+$z-selection: 15;
+$z-topbar: 30;
+$z-overlay: 40;
+$z-sidebar: 50;
+$z-modal: 60;
+$z-dropdown: 70;
+
+$shadow-card: 0 8px 24px rgba($color-midnight, 0.05);
+$shadow-accent: 0 6px 14px rgba($color-dodger, 0.35);
+$shadow-modal: 0 9px 18px rgba($color-dodger, 0.12);
+$shadow-selection: 0 10px 24px rgba($color-midnight, 0.28);
+
+:root {
+  --midnight: #{$color-midnight};
+  --midnight-soft: #{$color-midnight-soft};
+  --lavender: #{$color-lavender};
+  --white-smoke: #{$color-white-smoke};
+  --paper: #{$color-paper};
+  --dodger: #{$color-dodger};
+  --dodger-deep: #{$color-dodger-deep};
+  --sky: #{$color-sky};
+  --steel: #{$color-steel};
+  --ok: #{$color-ok};
+  --warn: #{$color-warn};
+  --bad: #{$color-bad};
+  --ink: #{$color-ink};
+  --muted: #{$color-muted};
+  --line: #{$color-line};
+  --shadow: #{$shadow-modal};
+  --radius: #{$radius};
+  --header-h: #{$header-height};
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}

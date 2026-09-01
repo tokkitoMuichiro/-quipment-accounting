@@ -1,0 +1,33 @@
+@import '../../styles/variables';
+
+.history-table-wrap {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.history-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: $font-size-sm;
+}
+
+.history-table th,
+.history-table td {
+  padding: 7px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.history-table th {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.history-table strong {
+  font-size: $font-size-sm;
+  font-weight: 700;
+}
+
+.history-table .muted {
+  font-size: $font-size-xs;
+}

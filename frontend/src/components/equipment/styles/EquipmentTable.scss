@@ -1,0 +1,124 @@
+@import '../../../styles/variables';
+
+.eq-board__table.table-wrap {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.eq-table {
+  table-layout: fixed;
+  width: 100%;
+  font-size: $font-size-sm;
+}
+
+.eq-table th,
+.eq-table td {
+  padding: 7px 8px;
+  min-width: 0;
+}
+
+.eq-table th {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.eq-table .muted {
+  font-size: $font-size-xs;
+}
+
+.eq-col-check {
+  width: 36px;
+  padding-left: 10px;
+  padding-right: 4px;
+}
+
+.eq-col-check .checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.eq-col-serial {
+  width: 14%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eq-col-qty {
+  width: 3rem;
+}
+
+.eq-col-docs {
+  width: 2.6rem;
+  text-align: center;
+}
+
+.eq-col-docs .checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.eq-col-condition {
+  width: 16%;
+}
+
+.eq-col-owner {
+  width: 14%;
+  overflow-wrap: anywhere;
+}
+
+.eq-col-actions {
+  width: 9rem;
+  padding-right: 10px;
+  white-space: nowrap;
+}
+
+.eq-col-name {
+  overflow-wrap: anywhere;
+}
+
+.eq-col-name strong {
+  font-size: $font-size-sm;
+  font-weight: 700;
+}
+
+.eq-table .eq-condition {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.eq-table .badge {
+  max-width: 100%;
+  font-size: $font-size-xs;
+  padding: 2px 6px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.eq-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.eq-row-actions .btn--small {
+  padding: 3px 8px;
+  min-height: 26px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.eq-row-actions .icon-btn {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+.eq-row-actions .icon-btn svg {
+  width: 14px;
+  height: 14px;
+}

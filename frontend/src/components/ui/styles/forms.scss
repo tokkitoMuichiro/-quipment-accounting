@@ -1,0 +1,77 @@
+@import '../../../styles/variables';
+
+.filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.filters input,
+.filters select {
+  flex: 1;
+  min-width: 160px;
+}
+
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  border: 1px solid $color-line;
+  background: $color-paper;
+  border-radius: $radius;
+  padding: 12px;
+  color: $color-ink;
+  min-height: $control-height;
+  width: 100%;
+}
+
+.checkbox {
+  width: $checkbox-size;
+  height: $checkbox-size;
+  accent-color: $color-dodger;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.form-grid > label {
+  display: grid;
+  gap: 6px;
+  font-size: $font-size-md;
+  color: $color-muted;
+  font-weight: 600;
+}
+
+.form-grid > label.check-field,
+.check-list .check-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: $color-ink;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.check-field .muted {
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.check-list {
+  display: grid;
+  gap: 8px;
+}
+
+.check-list__title {
+  font-size: $font-size-md;
+  color: $color-muted;
+  font-weight: 600;
+}
+
+.check-list .check-field {
+  padding: 6px 0;
+}

@@ -1,0 +1,25 @@
+@import '../../../styles/variables';
+
+.selection-bar {
+  position: sticky;
+  bottom: calc(12px + var(--safe-bottom));
+  z-index: $z-selection;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: $color-midnight;
+  color: $color-white;
+  box-shadow: $shadow-selection;
+}
+
+.selection-bar strong {
+  display: block;
+}
+
+.selection-bar__hint {
+  color: $color-lavender;
+  font-size: $font-size-md;
+}

@@ -1,0 +1,137 @@
+@import '../../../styles/variables';
+
+.eq-cards {
+  display: none;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.eq-card {
+  position: relative;
+  background: $color-paper;
+  border: 1px solid $color-line;
+  padding: 10px 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.eq-card--select-all {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: $font-size-sm;
+}
+
+.eq-card.is-selected {
+  border-color: $color-dodger;
+  box-shadow: inset 3px 0 0 $color-dodger;
+}
+
+.eq-card__head {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding-right: 60px;
+}
+
+.eq-card--no-mutate .eq-card__head {
+  padding-right: 0;
+}
+
+.eq-card__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.eq-card__title strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: $font-size-sm;
+}
+
+.eq-card__head .muted {
+  font-size: $font-size-xs;
+}
+
+.eq-card__head .icon-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.eq-card__head .icon-btn {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.eq-card__head .icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.eq-card__transfer {
+  position: static;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: $font-size-xs;
+}
+
+.eq-card__meta {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0;
+  font-size: $font-size-xs;
+}
+
+.eq-card__meta span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: $color-muted;
+}
+
+.eq-card__meta strong {
+  color: $color-ink;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.eq-card__meta .eq-condition {
+  flex: 1 1 140px;
+  width: auto;
+  max-width: 68%;
+}
+
+.eq-card__docs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: $color-ink;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.eq-card__docs .checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.eq-card__meta .badge {
+  font-size: $font-size-xs;
+  padding: 2px 6px;
+}
+
+.eq-card__note {
+  margin: 2px 0 0;
+  color: $color-muted;
+  font-size: $font-size-xs;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

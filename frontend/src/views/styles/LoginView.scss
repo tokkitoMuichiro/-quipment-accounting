@@ -1,0 +1,34 @@
+@import '../../styles/variables';
+
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba($color-midnight, 0.82), rgba($color-dodger, 0.35)),
+    $color-midnight;
+}
+
+.login__card {
+  width: min(440px, 100%);
+  padding: 0 24px 32px;
+  overflow: hidden;
+}
+
+.login__brand {
+  background: $color-midnight;
+  margin: 0 -24px 20px;
+  padding: 28px 24px 22px;
+}
+
+.login__card h1 {
+  margin: 12px 0 8px;
+  color: $color-midnight;
+}
+
+.login__card p {
+  color: $color-muted;
+  margin: 0 0 20px;
+}

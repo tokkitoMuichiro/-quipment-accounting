@@ -1,0 +1,26 @@
+@import '../../styles/variables';
+@import '../../styles/mixins';
+
+.layout {
+  display: grid;
+  grid-template-columns: $sidebar-width 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+}
+
+.content {
+  padding: 28px 32px 96px;
+  min-width: 0;
+  width: 100%;
+}
+
+@include mobile {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .content {
+    padding: 16px 14px 120px;
+  }
+}

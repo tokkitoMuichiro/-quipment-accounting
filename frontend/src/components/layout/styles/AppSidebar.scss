@@ -1,0 +1,96 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.sidebar {
+  background: $color-midnight;
+  color: $color-lavender;
+  padding: 22px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.sidebar__overlay {
+  display: none;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav a {
+  text-decoration: none;
+  padding: 12px 14px;
+  border-radius: $radius;
+  color: $color-lavender;
+  font-size: $font-size-md;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nav a.router-link-active,
+.nav a:hover {
+  background: $color-midnight-soft;
+  color: $color-white;
+}
+
+.nav__group {
+  margin-top: 18px;
+  padding: 0 14px 8px;
+  font-size: $font-size-xs;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: $color-steel-muted;
+}
+
+.sidebar__user {
+  margin-top: auto;
+  padding: 14px;
+  background: rgba($color-white, 0.04);
+}
+
+.sidebar__user strong {
+  display: block;
+  color: $color-white;
+}
+
+.sidebar__user span {
+  color: $color-steel-muted;
+  font-size: $font-size-sm;
+}
+
+.sidebar__actions {
+  margin-top: 10px;
+}
+
+.sidebar__hint {
+  margin-top: 8px;
+  color: $color-lavender;
+  font-size: $font-size-md;
+}
+
+@include mobile {
+  .sidebar__overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba($color-midnight, 0.45);
+    z-index: $z-overlay;
+  }
+
+  .sidebar {
+    position: fixed;
+    z-index: $z-sidebar;
+    inset: 0 auto 0 0;
+    width: $sidebar-mobile-width;
+    transform: translateX(-110%);
+    transition: transform 0.22s ease;
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+}

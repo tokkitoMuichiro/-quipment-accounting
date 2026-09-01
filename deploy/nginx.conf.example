@@ -1,0 +1,21 @@
+# Пример отдельного server-блока для FirstVDS.
+# Положите рядом с конфигом текущего сайта, НЕ заменяйте его.
+# 1. Создайте поддомен equipment.example.ru → IP сервера
+# 2. Скопируйте файл в /etc/nginx/sites-available/equipment
+# 3. ln -s /etc/nginx/sites-available/equipment /etc/nginx/sites-enabled/
+# 4. certbot --nginx -d equipment.example.ru
+# 5. nginx -t && systemctl reload nginx
+
+server {
+    listen 80;
+    server_name equipment.example.ru;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

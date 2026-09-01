@@ -1,0 +1,50 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba($color-midnight, 0.55);
+  display: grid;
+  place-items: end center;
+  padding: 0;
+  z-index: $z-modal;
+}
+
+.modal {
+  width: min(560px, 100%);
+  background: $color-paper;
+  padding: 22px 18px calc(22px + var(--safe-bottom));
+  box-shadow: $shadow-modal;
+  max-height: 92dvh;
+  overflow: auto;
+}
+
+.modal h3 {
+  margin: 0 0 16px;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+@include desktop {
+  .modal-back {
+    place-items: center;
+    padding: 20px;
+  }
+
+  .modal {
+    padding: 24px;
+  }
+}
+
+@include mobile {
+  .modal__actions .btn {
+    flex: 1;
+  }
+}

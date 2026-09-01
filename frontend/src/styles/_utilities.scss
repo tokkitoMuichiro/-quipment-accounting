@@ -1,0 +1,47 @@
+@import './variables';
+@import './mixins';
+
+.mono {
+  font-family: $font-family;
+  letter-spacing: 0.02em;
+}
+
+.muted {
+  color: $color-muted;
+  font-size: $font-size-md;
+  font-weight: 400;
+}
+
+.alert {
+  background: $color-bad-bg;
+  color: $color-bad;
+  padding: 10px 12px;
+  border-radius: $radius;
+  margin-bottom: 12px;
+}
+
+.empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: $color-muted;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+@include mobile {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+@include desktop {
+  .mobile-only {
+    display: none !important;
+  }
+}

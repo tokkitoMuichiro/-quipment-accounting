@@ -1,0 +1,39 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.page-head h2 {
+  margin: 0;
+  font-size: $font-size-xl;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.page-head p {
+  margin: 6px 0 0;
+  color: $color-muted;
+  font-size: $font-size-base;
+}
+
+@include mobile {
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-head h2 {
+    font-size: $font-size-lg;
+  }
+
+  .page-head .toolbar,
+  .page-head .btn {
+    width: 100%;
+  }
+}

@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: equipment
+      POSTGRES_PASSWORD: equipment
+      POSTGRES_DB: equipment
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U equipment -d equipment"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://equipment:equipment@postgres:5432/equipment
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      PORT: 3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      DEV_AUTH: ${DEV_AUTH:-false}
+      ADMIN_BITRIX_IDS: ${ADMIN_BITRIX_IDS:-}
+      BITRIX_CLIENT_ID: ${BITRIX_CLIENT_ID:-}
+      BITRIX_CLIENT_SECRET: ${BITRIX_CLIENT_SECRET:-}
+      BITRIX_EXCEL_FILENAME: ${BITRIX_EXCEL_FILENAME:-Учёт оборудования (авто).xlsx}
+      EXCEL_DEBOUNCE_MS: ${EXCEL_DEBOUNCE_MS:-60000}
+    ports:
+      - "3010:3000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

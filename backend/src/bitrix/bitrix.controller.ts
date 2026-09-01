@@ -1,0 +1,116 @@
+import {
+  All,
+  BadRequestException,
+  Controller,
+  Get,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Request, Response } from 'express';
+import { BitrixService } from './bitrix.service';
+import { AuthService } from '../auth/auth.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Controller('bitrix')
+export class BitrixController {
+  constructor(
+    private readonly bitrix: BitrixService,
+    private readonly auth: AuthService,
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @All('install')
+  async install(@Req() req: Request, @Res() res: Response) {
+    const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
+    await this.bitrix.savePortal(payload);
+
+    res
+      .status(200)
+      .type('html')
+      .send(
+        `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Установка</title></head>
+        <body style="font-family:sans-serif;padding:24px">
+        <h2>Учёт оборудования установлен</h2>
+        <p>Приложение привязано к порталу ${payload.domain || ''}. Можно закрыть это окно.</p>
+        </body></html>`,
+      );
+  }
+
+  @All('open')
+  async open(@Req() req: Request, @Res() res: Response) {
+    const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
+    if (!payload.accessToken || !payload.domain) {
+      throw new BadRequestException('Нет данных авторизации Битрикс24');
+    }
+
+    await this.bitrix.savePortal(payload);
+
+    const bxUser = await this.bitrix.currentUser(
+      payload.domain,
+      payload.accessToken,
+    );
+
+    const fullName =
+      [bxUser.LAST_NAME, bxUser.NAME, bxUser.SECOND_NAME]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || `Сотрудник ${bxUser.ID}`;
+
+    const user = await this.auth.upsertFromBitrix({
+      bitrixUserId: String(bxUser.ID),
+      fullName,
+      email: bxUser.EMAIL || null,
+    });
+
+    const token = this.auth.signToken(user.id);
+    const frontend = this.config.get<string>('FRONTEND_URL') || '/';
+    const url = `${frontend.replace(/\/$/, '')}/#token=${encodeURIComponent(token)}`;
+    res.redirect(302, url);
+  }
+
+  @Get('employees')
+  @UseGuards(JwtAuthGuard)
+  async employees() {
+    const portal = await this.prisma.bitrixPortal.findFirst({
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!portal) {
+      const locals = await this.prisma.user.findMany({
+        orderBy: { fullName: 'asc' },
+      });
+      return locals.map((u) => ({
+        id: u.id,
+        bitrixUserId: u.bitrixUserId,
+        fullName: u.fullName,
+        email: u.email,
+      }));
+    }
+
+    const employees = await this.bitrix.listEmployees(
+      portal.domain,
+      portal.accessToken,
+    );
+
+    const result: Array<{
+      id: string;
+      bitrixUserId: string;
+      fullName: string;
+      email: string | null;
+    }> = [];
+    for (const emp of employees) {
+      const local = await this.auth.upsertFromBitrix(emp);
+      result.push({
+        id: local.id,
+        bitrixUserId: local.bitrixUserId,
+        fullName: local.fullName,
+        email: local.email,
+      });
+    }
+    return result;
+  }
+}

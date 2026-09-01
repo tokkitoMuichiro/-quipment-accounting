@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EquipmentType {
+  SERIAL
+  CONSUMABLE
+}
+
+enum EquipmentCondition {
+  OK
+  NEEDS_REPAIR
+  IN_REPAIR
+  IRREPARABLE
+}
+
+enum OwnerType {
+  USER
+  WAREHOUSE
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  isSystem    Boolean  @default(false)
+  permissions Json
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id           String   @id @default(uuid())
+  bitrixUserId String   @unique
+  fullName     String
+  email        String?
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  equipment    Equipment[] @relation("OwnerUser")
+  keepers      WarehouseKeeper[]
+  actedTransfers Transfer[] @relation("TransferActor")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Warehouse {
+  id        String             @id @default(uuid())
+  name      String
+  slug      String?            @unique
+  isSystem  Boolean            @default(false)
+  address   String?
+  keepers   WarehouseKeeper[]
+  equipment Equipment[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model WarehouseKeeper {
+  userId      String
+  warehouseId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, warehouseId])
+}
+
+model Equipment {
+  id               String              @id @default(uuid())
+  name             String
+  factoryNumber    String?             @unique
+  quantity         Int                 @default(1)
+  type             EquipmentType
+  condition        EquipmentCondition
+  conditionNote    String?
+  hasDocuments     Boolean             @default(false)
+  ownerType        OwnerType
+  ownerUserId      String?
+  ownerWarehouseId String?
+  ownerUser        User?               @relation("OwnerUser", fields: [ownerUserId], references: [id])
+  ownerWarehouse   Warehouse?          @relation(fields: [ownerWarehouseId], references: [id])
+  transfers        Transfer[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+model Transfer {
+  id              String     @id @default(uuid())
+  equipmentId     String?
+  equipmentName   String
+  factoryNumber   String?
+  quantity        Int
+  fromOwnerType   OwnerType
+  fromUserId      String?
+  fromWarehouseId String?
+  fromLabel       String
+  toOwnerType     OwnerType
+  toUserId        String?
+  toWarehouseId   String?
+  toLabel         String
+  actorUserId     String
+  actor           User       @relation("TransferActor", fields: [actorUserId], references: [id])
+  equipment       Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+}
+
+model BitrixPortal {
+  id             String   @id @default(uuid())
+  memberId       String   @unique
+  domain         String
+  accessToken    String
+  refreshToken   String
+  clientEndpoint String?
+  excelFileId    String?
+  excelFolderId  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

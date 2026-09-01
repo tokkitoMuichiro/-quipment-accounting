@@ -1,0 +1,39 @@
+@import '../../../styles/variables';
+
+.icon-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: $radius;
+  background: transparent;
+  color: $color-muted;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.icon-btn:hover {
+  background: $color-white-smoke;
+  color: $color-ink;
+}
+
+.icon-btn--danger:hover {
+  background: $color-bad-bg;
+  color: $color-bad;
+}

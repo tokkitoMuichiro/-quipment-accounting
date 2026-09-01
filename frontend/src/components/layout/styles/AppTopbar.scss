@@ -1,0 +1,46 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.topbar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: $z-topbar;
+  height: $header-height;
+  padding: 0 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: $color-midnight;
+  color: $color-white;
+}
+
+.topbar__menu {
+  width: $control-height;
+  height: $control-height;
+  border: 0;
+  border-radius: $radius;
+  background: transparent;
+  color: $color-white;
+  font-size: 22px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.topbar__user {
+  flex: 1;
+  min-width: 0;
+  color: $color-white;
+  font-size: $font-size-md;
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@include mobile {
+  .topbar {
+    display: flex;
+  }
+}

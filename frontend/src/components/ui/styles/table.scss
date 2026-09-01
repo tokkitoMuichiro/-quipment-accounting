@@ -1,0 +1,74 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.card {
+  background: $color-paper;
+  border: 1px solid $color-line;
+  box-shadow: $shadow-card;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+.table-wrap--check {
+  width: 44px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid $color-line;
+  vertical-align: middle;
+}
+
+th {
+  font-size: $font-size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $color-muted;
+  background: $color-table-head;
+  font-weight: 700;
+}
+
+tr:hover td {
+  background: $color-row-hover;
+}
+
+tr.is-selected td {
+  background: $color-row-selected;
+}
+
+@include mobile {
+  .table-wrap.stack-on-mobile thead {
+    display: none;
+  }
+
+  .table-wrap.stack-on-mobile tr {
+    display: block;
+    border-bottom: 8px solid $color-white-smoke;
+  }
+
+  .table-wrap.stack-on-mobile td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border: 0;
+    padding: 10px 14px;
+  }
+
+  .table-wrap.stack-on-mobile td::before {
+    content: attr(data-label);
+    color: $color-muted;
+    font-size: $font-size-xs;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+  }
+}

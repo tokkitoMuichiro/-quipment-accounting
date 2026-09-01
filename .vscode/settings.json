@@ -1,0 +1,8 @@
+{
+  "files.associations": {
+    "*.vue": "vue"
+  },
+  "emmet.includeLanguages": {
+    "vue": "html"
+  }
+}
