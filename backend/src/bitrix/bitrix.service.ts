@@ -81,6 +81,42 @@ export class BitrixService {
     });
   }
 
+  openHandlerUrl() {
+    const frontend = (this.config.get<string>('FRONTEND_URL') || '').replace(
+      /\/$/,
+      '',
+    );
+    return `${frontend}/api/bitrix/open`;
+  }
+
+  async bindLeftMenu(domain: string, accessToken: string) {
+    const handler = this.openHandlerUrl();
+    if (!domain || !accessToken || !handler.startsWith('https://')) {
+      return;
+    }
+    try {
+      await this.call(
+        domain,
+        'placement.bind',
+        {
+          PLACEMENT: 'LEFT_MENU',
+          HANDLER: handler,
+          TITLE: 'Учёт оборудования',
+        },
+        accessToken,
+      );
+    } catch (error: any) {
+      const message = error?.bitrix?.error || error?.message || '';
+      if (
+        String(message).includes('ERROR_PLACEMENT_ALREADY_BIND') ||
+        String(message).toLowerCase().includes('already')
+      ) {
+        return;
+      }
+      this.logger.warn(`placement.bind: ${message}`);
+    }
+  }
+
   async call(
     domain: string,
     method: string,
