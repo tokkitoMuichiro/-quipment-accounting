@@ -2,12 +2,25 @@ node_modules/
 dist/
 .env
 .env.local
+dev.local.md
+dev.local.*
 *.log
 .DS_Store
+Thumbs.db
+desktop.ini
 coverage/
 .idea/
+.vscode/
+.cursor/
 frontend/dist/
 backend/dist/
 backend/.env
 frontend/.env
 docker-data/
+
+# Nginx/серверные примеры — на машине приложения не нужны
+deploy/
+*.pem
+*.key
+*.p12
+

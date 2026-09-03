@@ -31,15 +31,37 @@ export class BitrixController {
   async install(@Req() req: Request, @Res() res: Response) {
     const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
     await this.bitrix.savePortal(payload);
+    if (payload.domain && payload.accessToken) {
+      await this.bitrix.bindLeftMenu(payload.domain, payload.accessToken);
+    }
 
+    const handler = this.bitrix.openHandlerUrl();
     res
       .status(200)
       .type('html')
+      .setHeader('Content-Security-Policy', "frame-ancestors https://*.bitrix24.ru https://*.bitrix24.com https://*.bitrix24.by https://*.bitrix24.kz https://*.bitrix24.ua")
       .send(
-        `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Установка</title></head>
+        `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Установка</title>
+        <script src="https://api.bitrix24.com/api/v1/"></script></head>
         <body style="font-family:sans-serif;padding:24px">
         <h2>Учёт оборудования установлен</h2>
-        <p>Приложение привязано к порталу ${payload.domain || ''}. Можно закрыть это окно.</p>
+        <p>Пункт появится в левом меню, в группе «Приложения» (она свёрнута). Можно закрыть окно.</p>
+        <script>
+        (function () {
+          var handler = ${JSON.stringify(handler)};
+          function finish() {
+            if (window.BX24 && BX24.installFinish) BX24.installFinish();
+          }
+          if (!window.BX24) { finish(); return; }
+          BX24.init(function () {
+            BX24.callMethod('placement.bind', {
+              PLACEMENT: 'LEFT_MENU',
+              HANDLER: handler,
+              TITLE: 'Учёт оборудования'
+            }, function () { finish(); });
+          });
+        })();
+        </script>
         </body></html>`,
       );
   }
