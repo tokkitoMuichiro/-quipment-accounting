@@ -8,7 +8,10 @@
       :some-selected="someSelected"
       :condition-nonce="conditionNonce"
       :docs-nonce="docsNonce"
+      :show-repair-sender="showRepairSender"
       @transfer="$emit('transfer', $event)"
+      @accept="onAccept"
+      @cancel-pending="onCancelPending"
       @edit="$emit('edit', $event)"
       @remove="$emit('remove', $event)"
       @toggle="$emit('toggle', $event)"
@@ -24,7 +27,10 @@
       :some-selected="someSelected"
       :condition-nonce="conditionNonce"
       :docs-nonce="docsNonce"
+      :show-repair-sender="showRepairSender"
       @transfer="$emit('transfer', $event)"
+      @accept="onAccept"
+      @cancel-pending="onCancelPending"
       @edit="$emit('edit', $event)"
       @remove="$emit('remove', $event)"
       @toggle="$emit('toggle', $event)"
@@ -48,7 +54,7 @@ import EquipmentTable from './EquipmentTable.vue';
 import EquipmentCards from './EquipmentCards.vue';
 import ConditionNoteModal from './ConditionNoteModal.vue';
 import './styles/EquipmentBoard.scss';
-import { updateEquipment } from '../../api/equipment';
+import { acceptTransfer, cancelPendingTransfer, updateEquipment } from '../../api/equipment';
 import { useAuthStore } from '../../stores/auth';
 import { canEditDocumentsItem } from '../../utils/access';
 
@@ -58,6 +64,7 @@ defineProps({
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },
   someSelected: { type: Boolean, default: false },
+  showRepairSender: { type: Boolean, default: false },
 });
 const emit = defineEmits(['transfer', 'edit', 'remove', 'toggle', 'toggle-all', 'updated']);
 
@@ -109,6 +116,27 @@ async function onDocumentsChange({ item, hasDocuments }) {
 function cancelPending() {
   pending.value = null;
   bumpNonce();
+}
+
+async function onAccept(item) {
+  if (!window.confirm(`Принять «${item.name}»?`)) return;
+  try {
+    await acceptTransfer(item.id);
+    emit('updated');
+  } catch (e) {
+    window.alert(e.message);
+  }
+}
+
+async function onCancelPending(item) {
+  const to = item.pendingTransfer?.toLabel || 'получателю';
+  if (!window.confirm(`Отменить передачу «${item.name}» — ${to}?`)) return;
+  try {
+    await cancelPendingTransfer(item.id);
+    emit('updated');
+  } catch (e) {
+    window.alert(e.message);
+  }
 }
 
 function onNoteSaved() {

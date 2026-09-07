@@ -29,6 +29,11 @@
   color: $color-steel;
 }
 
+.badge--pending {
+  background: #e5f3ff;
+  color: $color-dodger;
+}
+
 .badge--tight {
   font-size: $font-size-xs;
   padding: 4px 8px;

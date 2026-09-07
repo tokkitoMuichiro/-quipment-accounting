@@ -16,6 +16,7 @@
       class="eq-card"
       :class="{
         'is-selected': isSelected(item.id),
+        'is-pending': isPending(item),
         'eq-card--no-mutate': !(can('edit') || canDelete(item)),
       }"
     >
@@ -25,6 +26,7 @@
           class="checkbox"
           type="checkbox"
           :checked="isSelected(item.id)"
+          :disabled="!canTransfer(item)"
           :aria-label="`Выбрать ${item.name}`"
           @change="$emit('toggle', item.id)"
         />
@@ -68,15 +70,42 @@
           <StatusBadge v-else :value="item.condition" :note="item.conditionNote" />
         </span>
         <p v-if="item.conditionNote" class="eq-card__note">{{ item.conditionNote }}</p>
-        <span>Владелец <strong>{{ ownerLabel(item) }}</strong></span>
+        <span v-if="showRepairSender">
+          Кто отправил
+          <strong>{{ repairSenderLabel(item) || '—' }}</strong>
+        </span>
+        <span v-else>Владелец <strong>{{ ownerLabel(item) }}</strong></span>
+        <span v-if="showRepairSender && item.sentToRepairFrom" class="muted">
+          Откуда <strong>{{ item.sentToRepairFrom }}</strong>
+        </span>
+        <span v-if="isPending(item)" class="eq-card__pending">
+          <span class="badge badge--pending">Ждёт принятия</span>
+          <strong>{{ pendingOfferLabel(item) }}</strong>
+        </span>
       </div>
-      <button
-        v-if="canTransfer(item)"
-        class="btn btn--small btn--accent eq-card__transfer"
-        @click="$emit('transfer', item)"
-      >
-        Передать
-      </button>
+      <div v-if="canAccept(item) || canCancel(item) || canTransfer(item)" class="eq-card__actions">
+        <button
+          v-if="canAccept(item)"
+          class="btn btn--small btn--accent"
+          @click="$emit('accept', item)"
+        >
+          Принять
+        </button>
+        <button
+          v-if="canCancel(item)"
+          class="btn btn--small btn--ghost"
+          @click="$emit('cancel-pending', item)"
+        >
+          Отменить
+        </button>
+        <button
+          v-if="canTransfer(item)"
+          class="btn btn--small btn--accent eq-card__transfer"
+          @click="$emit('transfer', item)"
+        >
+          Передать
+        </button>
+      </div>
     </article>
     <div v-if="!items.length" class="empty card">Пока нет оборудования в этом списке.</div>
   </div>
@@ -88,8 +117,16 @@ import ConditionSelect from './ConditionSelect.vue';
 import './styles/EquipmentCards.scss';
 import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
-import { ownerLabel, typeLabel } from '../../utils/format';
-import { canTransferItem, canChangeConditionItem, canEditDocumentsItem, canDeleteItem } from '../../utils/access';
+import { ownerLabel, pendingOfferLabel, repairSenderLabel, typeLabel } from '../../utils/format';
+import {
+  canAcceptTransfer,
+  canCancelPendingTransfer,
+  canChangeConditionItem,
+  canDeleteItem,
+  canEditDocumentsItem,
+  canTransferItem,
+  isPendingAccept,
+} from '../../utils/access';
 
 defineProps({
   items: { type: Array, default: () => [] },
@@ -99,12 +136,16 @@ defineProps({
   someSelected: { type: Boolean, default: false },
   conditionNonce: { type: Number, default: 0 },
   docsNonce: { type: Number, default: 0 },
+  showRepairSender: { type: Boolean, default: false },
 });
-defineEmits(['transfer', 'edit', 'remove', 'toggle', 'toggle-all', 'condition-change', 'documents-change']);
+defineEmits(['transfer', 'accept', 'cancel-pending', 'edit', 'remove', 'toggle', 'toggle-all', 'condition-change', 'documents-change']);
 
 const auth = useAuthStore();
 const can = auth.can;
 const canTransfer = (item) => canTransferItem(auth, item);
+const canAccept = (item) => canAcceptTransfer(auth, item);
+const canCancel = (item) => canCancelPendingTransfer(auth, item);
+const isPending = (item) => isPendingAccept(item);
 const canChange = (item) => canChangeConditionItem(auth, item);
 const canEditDocs = (item) => canEditDocumentsItem(auth, item);
 const canDelete = (item) => canDeleteItem(auth, item);

@@ -1,4 +1,6 @@
 @import '../../styles/variables';
+@import '../../styles/mixins';
+@import '../../components/ui/styles/StatusBadge';
 
 .history-table-wrap {
   overflow-x: hidden;
@@ -16,6 +18,8 @@
   padding: 7px 8px;
   min-width: 0;
   overflow-wrap: anywhere;
+  vertical-align: middle;
+  align-items: center;
 }
 
 .history-table th {
@@ -30,4 +34,30 @@
 
 .history-table .muted {
   font-size: $font-size-xs;
+}
+
+.history-col-status {
+  width: 11rem;
+  overflow-wrap: normal;
+}
+
+.history-table .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 22px;
+  font-size: $font-size-xs;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+@include mobile {
+  .history-table .history-col-status {
+    width: auto;
+    align-items: center;
+  }
 }

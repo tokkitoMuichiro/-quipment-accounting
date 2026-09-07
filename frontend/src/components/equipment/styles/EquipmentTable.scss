@@ -63,14 +63,13 @@
 }
 
 .eq-col-owner {
-  width: 14%;
+  width: 16%;
   overflow-wrap: anywhere;
 }
 
 .eq-col-actions {
-  width: 9rem;
+  width: 13.5rem;
   padding-right: 10px;
-  white-space: nowrap;
 }
 
 .eq-col-name {
@@ -100,9 +99,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 4px;
   width: 100%;
-  white-space: nowrap;
 }
 
 .eq-row-actions .btn--small {
@@ -121,4 +120,16 @@
 .eq-row-actions .icon-btn svg {
   width: 14px;
   height: 14px;
+}
+
+.eq-pending {
+  margin-top: 4px;
+}
+
+.eq-pending .badge {
+  margin-bottom: 2px;
+}
+
+.eq-table tr.is-pending td {
+  background: #f4f9ff;
 }

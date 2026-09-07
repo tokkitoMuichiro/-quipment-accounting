@@ -24,6 +24,12 @@ enum OwnerType {
   WAREHOUSE
 }
 
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -45,6 +51,7 @@ model User {
   equipment    Equipment[] @relation("OwnerUser")
   keepers      WarehouseKeeper[]
   actedTransfers Transfer[] @relation("TransferActor")
+  incomingTransfers Transfer[] @relation("TransferToUser")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -84,7 +91,9 @@ model Equipment {
   ownerWarehouseId String?
   ownerUser        User?               @relation("OwnerUser", fields: [ownerUserId], references: [id])
   ownerWarehouse   Warehouse?          @relation(fields: [ownerWarehouseId], references: [id])
-  transfers        Transfer[]
+  pendingTransferId String?            @unique
+  pendingTransfer  Transfer?           @relation("PendingOffer", fields: [pendingTransferId], references: [id])
+  transfers        Transfer[]          @relation("TransferEquipment")
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -92,11 +101,12 @@ model Equipment {
 }
 
 model Transfer {
-  id              String     @id @default(uuid())
+  id              String         @id @default(uuid())
   equipmentId     String?
   equipmentName   String
   factoryNumber   String?
   quantity        Int
+  status          TransferStatus @default(COMPLETED)
   fromOwnerType   OwnerType
   fromUserId      String?
   fromWarehouseId String?
@@ -106,9 +116,11 @@ model Transfer {
   toWarehouseId   String?
   toLabel         String
   actorUserId     String
-  actor           User       @relation("TransferActor", fields: [actorUserId], references: [id])
-  equipment       Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
-  createdAt       DateTime   @default(now())
+  actor           User           @relation("TransferActor", fields: [actorUserId], references: [id])
+  toUser          User?          @relation("TransferToUser", fields: [toUserId], references: [id])
+  equipment       Equipment?     @relation("TransferEquipment", fields: [equipmentId], references: [id], onDelete: SetNull)
+  pendingFor      Equipment?     @relation("PendingOffer")
+  createdAt       DateTime       @default(now())
 }
 
 model BitrixPortal {

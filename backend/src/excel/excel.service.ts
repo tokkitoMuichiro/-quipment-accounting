@@ -42,7 +42,11 @@ export class ExcelService implements OnModuleDestroy {
 
   async buildWorkbookBuffer(): Promise<Buffer> {
     const items = await this.prisma.equipment.findMany({
-      include: { ownerUser: true, ownerWarehouse: true },
+      include: {
+        ownerUser: true,
+        ownerWarehouse: true,
+        pendingTransfer: true,
+      },
       orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }],
     });
 
@@ -62,6 +66,7 @@ export class ExcelService implements OnModuleDestroy {
       { header: 'Паспорта и сертификаты', key: 'hasDocuments', width: 24 },
       { header: 'Тип', key: 'type', width: 16 },
       { header: 'Владелец', key: 'owner', width: 36 },
+      { header: 'Ожидает принятия', key: 'pending', width: 28 },
       { header: 'Дата обновления', key: 'updatedAt', width: 22 },
     ];
 
@@ -78,6 +83,11 @@ export class ExcelService implements OnModuleDestroy {
           ? item.ownerUser?.fullName || 'Не назначен'
           : `База: ${item.ownerWarehouse?.name || 'не указана'}`;
 
+      const pending =
+        item.pendingTransfer?.status === 'PENDING'
+          ? item.pendingTransfer.toLabel || 'Да'
+          : '';
+
       sheet.addRow({
         name: item.name,
         factoryNumber: item.factoryNumber || '',
@@ -87,6 +97,7 @@ export class ExcelService implements OnModuleDestroy {
         hasDocuments: item.hasDocuments ? 'Да' : 'Нет',
         type: item.type === 'SERIAL' ? 'Серийное' : 'Неномерное',
         owner,
+        pending,
         updatedAt: item.updatedAt.toLocaleString('ru-RU'),
       });
     }

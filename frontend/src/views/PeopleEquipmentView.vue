@@ -105,7 +105,7 @@ const {
   toggleAll,
   clear,
   selectedIds,
-} = useSelection(filtered);
+} = useSelection(filtered, (item) => canTransferItem(auth, item));
 const canSelect = computed(() => filtered.value.some((item) => canTransferItem(auth, item)));
 const canTransferSelected = computed(
   () => selectedItems.value.length > 0 && selectedItems.value.every((item) => canTransferItem(auth, item)),

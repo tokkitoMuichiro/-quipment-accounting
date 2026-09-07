@@ -25,6 +25,12 @@ export function conditionNeedsNote(condition) {
   return CONDITIONS_NEEDING_NOTE.includes(condition);
 }
 
+export const TRANSFER_STATUS_LABEL = {
+  PENDING: 'Ждёт принятия',
+  COMPLETED: 'Выполнена',
+  CANCELLED: 'Отменена',
+};
+
 export function ownerLabel(item) {
   if (item.ownerType === 'USER') {
     return item.ownerUser?.fullName || 'Сотрудник';
@@ -32,6 +38,20 @@ export function ownerLabel(item) {
   return item.ownerWarehouse
     ? `База: ${item.ownerWarehouse.name}`
     : 'Производственная база';
+}
+
+export function pendingOfferLabel(item) {
+  const pending = item?.pendingTransfer;
+  if (pending?.status !== 'PENDING') return '';
+  const to = pending.toLabel || 'сотруднику';
+  if (item.type !== 'SERIAL' && pending.quantity && pending.quantity !== item.quantity) {
+    return `→ ${to} (${pending.quantity} шт.)`;
+  }
+  return `→ ${to}`;
+}
+
+export function repairSenderLabel(item) {
+  return item?.sentToRepairBy?.fullName || '';
 }
 
 export function typeLabel(item) {

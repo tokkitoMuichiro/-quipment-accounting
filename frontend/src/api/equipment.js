@@ -23,3 +23,11 @@ export function transferEquipment(id, body) {
 export function bulkTransferEquipment(body) {
   return api('/equipment/bulk-transfer', { method: 'POST', body });
 }
+
+export function acceptTransfer(id) {
+  return api(`/equipment/${id}/accept`, { method: 'POST' });
+}
+
+export function cancelPendingTransfer(id) {
+  return api(`/equipment/${id}/cancel-pending`, { method: 'POST' });
+}

@@ -69,6 +69,16 @@ export class EquipmentController {
     return this.equipment.remove(id, user);
   }
 
+  @Post(':id/accept')
+  accept(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.equipment.acceptTransfer(id, user);
+  }
+
+  @Post(':id/cancel-pending')
+  cancelPending(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.equipment.cancelPendingTransfer(id, user);
+  }
+
   @Post(':id/transfer')
   @RequirePermissions('transfer')
   transfer(
