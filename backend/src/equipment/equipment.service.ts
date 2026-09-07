@@ -252,32 +252,23 @@ export class EquipmentService {
       }
     }
 
-    try {
-      const item = await this.prisma.equipment.create({
-        data: {
-          name: data.name.trim(),
-          type: data.type,
-          factoryNumber: data.factoryNumber,
-          quantity: data.quantity,
-          condition: data.condition,
-          conditionNote,
-          hasDocuments: Boolean(dto.hasDocuments),
-          ownerType,
-          ownerUserId: ownerType === 'USER' ? ownerUserId : null,
-          ownerWarehouseId: ownerType === 'WAREHOUSE' ? ownerWarehouseId : null,
-        },
-        include: includeOwner,
-      });
-      this.excel.scheduleSync();
-      return item;
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
-        throw new BadRequestException(
-          'Заводской номер уже есть в учёте',
-        );
-      }
-      throw error;
-    }
+    const item = await this.prisma.equipment.create({
+      data: {
+        name: data.name.trim(),
+        type: data.type,
+        factoryNumber: data.factoryNumber,
+        quantity: data.quantity,
+        condition: data.condition,
+        conditionNote,
+        hasDocuments: Boolean(dto.hasDocuments),
+        ownerType,
+        ownerUserId: ownerType === 'USER' ? ownerUserId : null,
+        ownerWarehouseId: ownerType === 'WAREHOUSE' ? ownerWarehouseId : null,
+      },
+      include: includeOwner,
+    });
+    this.excel.scheduleSync();
+    return item;
   }
 
   async update(id: string, dto: UpdateEquipmentDto, user: AuthUser) {
@@ -327,53 +318,46 @@ export class EquipmentService {
       ? this.resolveConditionNote(item, dto, nextCondition)
       : undefined;
 
-    try {
-      const resultId = await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.equipment.update({
-          where: { id },
-          data: {
-            name: canFullEdit ? dto.name?.trim() : undefined,
-            factoryNumber:
-              !canFullEdit || dto.factoryNumber === undefined
-                ? undefined
-                : dto.factoryNumber.trim() || null,
-            quantity: canFullEdit ? dto.quantity : undefined,
-            condition: wantsCondition ? nextCondition : undefined,
-            conditionNote,
-            hasDocuments: wantsDocs ? dto.hasDocuments : undefined,
-          },
-        });
+    const resultId = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.equipment.update({
+        where: { id },
+        data: {
+          name: canFullEdit ? dto.name?.trim() : undefined,
+          factoryNumber:
+            !canFullEdit || dto.factoryNumber === undefined
+              ? undefined
+              : dto.factoryNumber.trim() || null,
+          quantity: canFullEdit ? dto.quantity : undefined,
+          condition: wantsCondition ? nextCondition : undefined,
+          conditionNote,
+          hasDocuments: wantsDocs ? dto.hasDocuments : undefined,
+        },
+      });
 
-        if (wantsCondition && nextCondition === 'IN_REPAIR') {
-          const repair = await this.ensureRepairWarehouseTx(tx);
-          if (updated.ownerWarehouseId !== repair.id) {
-            return this.transferInTx(
-              tx,
-              updated.id,
-              {
-                toOwnerType: 'WAREHOUSE',
-                toWarehouseId: repair.id,
-              },
-              user,
-              { systemRepairMove: true },
-            );
-          }
+      if (wantsCondition && nextCondition === 'IN_REPAIR') {
+        const repair = await this.ensureRepairWarehouseTx(tx);
+        if (updated.ownerWarehouseId !== repair.id) {
+          return this.transferInTx(
+            tx,
+            updated.id,
+            {
+              toOwnerType: 'WAREHOUSE',
+              toWarehouseId: repair.id,
+            },
+            user,
+            { systemRepairMove: true },
+          );
         }
-
-        return updated.id;
-      });
-
-      this.excel.scheduleSync();
-      return this.prisma.equipment.findUnique({
-        where: { id: resultId },
-        include: includeOwner,
-      });
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
-        throw new BadRequestException('Заводской номер уже есть в учёте');
       }
-      throw error;
-    }
+
+      return updated.id;
+    });
+
+    this.excel.scheduleSync();
+    return this.prisma.equipment.findUnique({
+      where: { id: resultId },
+      include: includeOwner,
+    });
   }
 
   async remove(id: string, user: AuthUser) {
