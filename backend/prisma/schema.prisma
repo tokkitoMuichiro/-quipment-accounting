@@ -73,7 +73,7 @@ model WarehouseKeeper {
 model Equipment {
   id               String              @id @default(uuid())
   name             String
-  factoryNumber    String?             @unique
+  factoryNumber    String?
   quantity         Int                 @default(1)
   type             EquipmentType
   condition        EquipmentCondition
@@ -87,6 +87,8 @@ model Equipment {
   transfers        Transfer[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+
+  @@index([factoryNumber])
 }
 
 model Transfer {
