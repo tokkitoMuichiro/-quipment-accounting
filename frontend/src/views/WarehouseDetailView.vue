@@ -2,7 +2,7 @@
   <section>
     <PageHeader
       :title="warehouse?.name || 'Производственная база'"
-      :subtitle="warehouse?.address || 'Оборудование на этой базе'"
+      :subtitle="isRepairWarehouse ? 'Кто отправил оборудование в ремонт' : (warehouse?.address || 'Оборудование на этой базе')"
     >
       <template #actions>
         <router-link class="btn btn--ghost" to="/warehouses">Назад</router-link>
@@ -20,6 +20,7 @@
       :is-selected="isSelected"
       :all-selected="allSelected"
       :some-selected="someSelected"
+      :show-repair-sender="isRepairWarehouse"
       @transfer="openTransfer([$event])"
       @edit="editItem = $event"
       @remove="removeItem"
@@ -74,6 +75,7 @@ const editItem = ref(null);
 const transferItems = ref([]);
 const id = computed(() => route.params.id);
 const items = computed(() => warehouse.value?.equipment || []);
+const isRepairWarehouse = computed(() => warehouse.value?.slug === 'repair');
 const {
   selectedItems,
   allSelected,
@@ -82,7 +84,7 @@ const {
   toggle,
   toggleAll,
   clear,
-} = useSelection(items);
+} = useSelection(items, (item) => canTransferItem(auth, item));
 const canTransferSelected = computed(
   () => selectedItems.value.length > 0 && selectedItems.value.every((item) => canTransferItem(auth, item)),
 );

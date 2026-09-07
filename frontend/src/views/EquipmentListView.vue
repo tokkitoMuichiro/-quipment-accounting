@@ -86,7 +86,7 @@ const {
   toggleAll,
   clear,
   selectedIds,
-} = useSelection(filtered);
+} = useSelection(filtered, (item) => canTransferItem(auth, item));
 const showForm = ref(false);
 const editItem = ref(null);
 const transferItems = ref([]);

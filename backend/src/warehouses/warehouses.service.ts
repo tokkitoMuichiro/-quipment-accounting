@@ -45,7 +45,13 @@ export class WarehousesService {
       include: {
         keepers: { include: { user: true } },
         equipment: {
-          include: { ownerUser: true, ownerWarehouse: true },
+          include: {
+            ownerUser: true,
+            ownerWarehouse: true,
+            pendingTransfer: {
+              include: { actor: { select: { id: true, fullName: true } } },
+            },
+          },
           orderBy: { name: 'asc' },
         },
       },
@@ -53,7 +59,47 @@ export class WarehousesService {
     if (!warehouse) {
       throw new NotFoundException('Производственная база не найдена');
     }
-    return warehouse;
+
+    if (warehouse.slug !== REPAIR_WAREHOUSE_SLUG || !warehouse.equipment.length) {
+      return warehouse;
+    }
+
+    const equipmentIds = warehouse.equipment.map((item) => item.id);
+    const inbound = await this.prisma.transfer.findMany({
+      where: {
+        status: 'COMPLETED',
+        toWarehouseId: warehouse.id,
+        equipmentId: { in: equipmentIds },
+      },
+      include: {
+        actor: { select: { id: true, fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const latestByEquipment = new Map<
+      string,
+      (typeof inbound)[number]
+    >();
+    for (const row of inbound) {
+      if (!row.equipmentId || latestByEquipment.has(row.equipmentId)) continue;
+      latestByEquipment.set(row.equipmentId, row);
+    }
+
+    return {
+      ...warehouse,
+      equipment: warehouse.equipment.map((item) => {
+        const last = latestByEquipment.get(item.id);
+        return {
+          ...item,
+          sentToRepairBy: last?.actor
+            ? { id: last.actor.id, fullName: last.actor.fullName }
+            : null,
+          sentToRepairFrom: last?.fromLabel || null,
+          sentToRepairAt: last?.createdAt || null,
+        };
+      }),
+    };
   }
 
   create(dto: CreateWarehouseDto) {

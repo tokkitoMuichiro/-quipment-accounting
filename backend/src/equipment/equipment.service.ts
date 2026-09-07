@@ -18,6 +18,7 @@ import {
   canDeleteItem,
   canEditDocuments,
   canTransferFrom,
+  isPrivilegedStaff,
   isWarehouseKeeper,
   keeperWarehouseIds,
   rolePermissions,
@@ -43,6 +44,11 @@ const CONDITIONS_NEEDING_NOTE: Equipment['condition'][] = [
 const includeOwner = {
   ownerUser: true,
   ownerWarehouse: true,
+  pendingTransfer: {
+    include: {
+      actor: { select: { id: true, fullName: true } },
+    },
+  },
 } satisfies Prisma.EquipmentInclude;
 
 @Injectable()
@@ -142,6 +148,11 @@ export class EquipmentService {
         warehouseIds.length
           ? { ownerWarehouseId: { in: warehouseIds } }
           : undefined,
+        {
+          pendingTransfer: {
+            is: { status: 'PENDING', toUserId: user.id },
+          },
+        },
       ].filter(Boolean) as Prisma.EquipmentWhereInput[],
     };
   }
@@ -154,14 +165,26 @@ export class EquipmentService {
   ) {
     const where: Prisma.EquipmentWhereInput = {};
     if (ownerUserId) {
-      where.ownerType = 'USER';
-      where.ownerUserId = ownerUserId;
+      where.OR = [
+        { ownerType: 'USER', ownerUserId },
+        {
+          pendingTransfer: {
+            is: { status: 'PENDING', toUserId: ownerUserId },
+          },
+        },
+      ];
     } else if (warehouseId) {
       where.ownerType = 'WAREHOUSE';
       where.ownerWarehouseId = warehouseId;
     } else if (scope === 'mine') {
-      where.ownerType = 'USER';
-      where.ownerUserId = user.id;
+      where.OR = [
+        { ownerType: 'USER', ownerUserId: user.id },
+        {
+          pendingTransfer: {
+            is: { status: 'PENDING', toUserId: user.id },
+          },
+        },
+      ];
     } else {
       Object.assign(where, this.visibleWhere(user));
     }
@@ -318,6 +341,21 @@ export class EquipmentService {
       ? this.resolveConditionNote(item, dto, nextCondition)
       : undefined;
 
+    if (item.pendingTransferId && wantsCondition) {
+      throw new BadRequestException(
+        'Сначала отмените передачу или дождитесь принятия',
+      );
+    }
+    if (
+      item.pendingTransferId &&
+      dto.quantity !== undefined &&
+      dto.quantity !== item.quantity
+    ) {
+      throw new BadRequestException(
+        'Сначала отмените передачу или дождитесь принятия',
+      );
+    }
+
     const resultId = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.equipment.update({
         where: { id },
@@ -367,6 +405,11 @@ export class EquipmentService {
         'Можно удалять только своё оборудование или оборудование своей базы',
       );
     }
+    if (item.pendingTransferId) {
+      throw new BadRequestException(
+        'Сначала отмените передачу или дождитесь принятия',
+      );
+    }
     await this.prisma.equipment.delete({ where: { id } });
     this.excel.scheduleSync();
     return { ok: true };
@@ -375,6 +418,17 @@ export class EquipmentService {
   async transfer(id: string, dto: TransferEquipmentDto, user: AuthUser) {
     if (!hasPermission(rolePermissions(user), 'transfer')) {
       throw new ForbiddenException('Нет права передавать');
+    }
+
+    if (dto.toOwnerType === 'USER') {
+      const resultId = await this.prisma.$transaction((tx) =>
+        this.offerPendingInTx(tx, id, dto, user),
+      );
+      this.excel.scheduleSync();
+      return this.prisma.equipment.findUnique({
+        where: { id: resultId },
+        include: includeOwner,
+      });
     }
 
     const resultId = await this.prisma.$transaction((tx) =>
@@ -386,6 +440,143 @@ export class EquipmentService {
       where: { id: resultId },
       include: includeOwner,
     });
+  }
+
+  async acceptTransfer(id: string, user: AuthUser) {
+    const item = await this.get(id, user);
+    const pending = item.pendingTransfer;
+    if (!pending || pending.status !== 'PENDING') {
+      throw new BadRequestException('Нет передачи, ожидающей принятия');
+    }
+    if (pending.toUserId !== user.id && !isPrivilegedStaff(user)) {
+      throw new ForbiddenException('Принять может только получатель');
+    }
+
+    const resultId = await this.prisma.$transaction((tx) =>
+      this.transferInTx(
+        tx,
+        id,
+        {
+          toOwnerType: pending.toOwnerType,
+          toUserId: pending.toUserId || undefined,
+          toWarehouseId: pending.toWarehouseId || undefined,
+          quantity: pending.quantity,
+        },
+        user,
+        { applyExistingTransferId: pending.id },
+      ),
+    );
+
+    this.excel.scheduleSync();
+    return this.prisma.equipment.findUnique({
+      where: { id: resultId },
+      include: includeOwner,
+    });
+  }
+
+  async cancelPendingTransfer(id: string, user: AuthUser) {
+    const item = await this.get(id, user);
+    const pending = item.pendingTransfer;
+    if (!pending || pending.status !== 'PENDING') {
+      throw new BadRequestException('Нет передачи, ожидающей принятия');
+    }
+    const canCancel =
+      pending.actorUserId === user.id ||
+      isPrivilegedStaff(user) ||
+      canTransferFrom(user, item);
+    if (!canCancel) {
+      throw new ForbiddenException('Отменить может тот, кто передавал');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.equipment.update({
+        where: { id: item.id },
+        data: { pendingTransferId: null },
+      });
+      await tx.transfer.update({
+        where: { id: pending.id },
+        data: { status: 'CANCELLED' },
+      });
+    });
+    this.excel.scheduleSync();
+    return this.get(id, user);
+  }
+
+  private async offerPendingInTx(
+    tx: Prisma.TransactionClient,
+    id: string,
+    dto: TransferEquipmentDto,
+    user: AuthUser,
+  ) {
+    const item = await tx.equipment.findUnique({ where: { id } });
+    if (!item) {
+      throw new NotFoundException('Оборудование не найдено');
+    }
+    this.assertCanTransferFrom(user, item);
+    if (item.pendingTransferId) {
+      throw new BadRequestException(
+        'Эта позиция уже ожидает принятия. Отмените передачу или дождитесь получателя',
+      );
+    }
+    if (!dto.toUserId) {
+      throw new BadRequestException('Укажите получателя');
+    }
+    const recipient = await tx.user.findUnique({ where: { id: dto.toUserId } });
+    if (!recipient) {
+      throw new BadRequestException('Получатель не найден');
+    }
+    if (item.ownerType === 'USER' && item.ownerUserId === dto.toUserId) {
+      throw new BadRequestException('Уже находится у этого владельца');
+    }
+
+    const qty =
+      item.type === 'SERIAL'
+        ? 1
+        : dto.quantity && dto.quantity > 0
+          ? dto.quantity
+          : item.quantity;
+    if (qty > item.quantity) {
+      throw new BadRequestException('Недостаточно количества');
+    }
+
+    const fromLabel = await this.ownerLabelTx(
+      tx,
+      item.ownerType,
+      item.ownerUserId,
+      item.ownerWarehouseId,
+    );
+    const toLabel = await this.ownerLabelTx(
+      tx,
+      'USER',
+      dto.toUserId,
+      null,
+    );
+
+    const pending = await tx.transfer.create({
+      data: {
+        equipmentId: item.id,
+        equipmentName: item.name,
+        factoryNumber: item.factoryNumber,
+        quantity: qty,
+        status: 'PENDING',
+        fromOwnerType: item.ownerType,
+        fromUserId: item.ownerUserId,
+        fromWarehouseId: item.ownerWarehouseId,
+        fromLabel,
+        toOwnerType: 'USER',
+        toUserId: dto.toUserId,
+        toWarehouseId: null,
+        toLabel,
+        actorUserId: user.id,
+      },
+    });
+
+    await tx.equipment.update({
+      where: { id: item.id },
+      data: { pendingTransferId: pending.id },
+    });
+
+    return item.id;
   }
 
   private async ensureRepairWarehouseTx(tx: Prisma.TransactionClient) {
@@ -409,14 +600,26 @@ export class EquipmentService {
     id: string,
     dto: TransferEquipmentDto,
     user: AuthUser,
-    options?: { systemRepairMove?: boolean },
+    options?: { systemRepairMove?: boolean; applyExistingTransferId?: string },
   ) {
     const item = await tx.equipment.findUnique({ where: { id } });
     if (!item) {
       throw new NotFoundException('Оборудование не найдено');
     }
 
-    if (!options?.systemRepairMove) {
+    if (item.pendingTransferId && !options?.applyExistingTransferId) {
+      throw new BadRequestException(
+        'Сначала отмените передачу или дождитесь принятия',
+      );
+    }
+    if (
+      options?.applyExistingTransferId &&
+      item.pendingTransferId !== options.applyExistingTransferId
+    ) {
+      throw new BadRequestException('Нет передачи, ожидающей принятия');
+    }
+
+    if (!options?.systemRepairMove && !options?.applyExistingTransferId) {
       this.assertCanTransferFrom(user, item);
     }
 
@@ -462,6 +665,13 @@ export class EquipmentService {
       dto.toUserId,
       dto.toWarehouseId,
     );
+
+    if (options?.applyExistingTransferId) {
+      await tx.equipment.update({
+        where: { id: item.id },
+        data: { pendingTransferId: null },
+      });
+    }
 
     let remainingId = item.id;
 
@@ -546,23 +756,34 @@ export class EquipmentService {
       }
     }
 
-    await tx.transfer.create({
-      data: {
-        equipmentId: remainingId,
-        equipmentName: item.name,
-        factoryNumber: item.factoryNumber,
-        quantity: qty,
-        fromOwnerType: item.ownerType,
-        fromUserId: item.ownerUserId,
-        fromWarehouseId: item.ownerWarehouseId,
-        fromLabel,
-        toOwnerType: dto.toOwnerType,
-        toUserId: dto.toUserId || null,
-        toWarehouseId: dto.toWarehouseId || null,
-        toLabel,
-        actorUserId: user.id,
-      },
-    });
+    if (options?.applyExistingTransferId) {
+      await tx.transfer.update({
+        where: { id: options.applyExistingTransferId },
+        data: {
+          status: 'COMPLETED',
+          equipmentId: remainingId,
+        },
+      });
+    } else {
+      await tx.transfer.create({
+        data: {
+          equipmentId: remainingId,
+          equipmentName: item.name,
+          factoryNumber: item.factoryNumber,
+          quantity: qty,
+          status: 'COMPLETED',
+          fromOwnerType: item.ownerType,
+          fromUserId: item.ownerUserId,
+          fromWarehouseId: item.ownerWarehouseId,
+          fromLabel,
+          toOwnerType: dto.toOwnerType,
+          toUserId: dto.toUserId || null,
+          toWarehouseId: dto.toWarehouseId || null,
+          toLabel,
+          actorUserId: user.id,
+        },
+      });
+    }
 
     return remainingId;
   }

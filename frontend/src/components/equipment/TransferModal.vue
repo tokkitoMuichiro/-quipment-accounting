@@ -64,7 +64,11 @@ const list = computed(() => (props.items.length ? props.items : props.item ? [pr
 const title = computed(() =>
   list.value.length > 1 ? `Передать ${list.value.length} позиций` : `Передать: ${list.value[0]?.name || ''}`,
 );
-const hint = 'Передача мгновенная. Получатель увидит оборудование сразу.';
+const hint = computed(() =>
+  form.toOwnerType === 'USER'
+    ? 'Сотрудник должен нажать «Принять» по каждой позиции. До этого оборудование остаётся у вас в статусе «Ждёт принятия».'
+    : 'На производственную базу оборудование переходит сразу.',
+);
 
 const people = ref([]);
 const warehouses = ref([]);

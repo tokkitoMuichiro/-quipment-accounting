@@ -1,9 +1,15 @@
 import { computed, ref } from 'vue';
 
-export function useSelection(itemsRef) {
+export function useSelection(itemsRef, canSelectItem) {
   const selectedIds = ref([]);
 
   const selectedSet = computed(() => new Set(selectedIds.value));
+
+  const selectableItems = computed(() => {
+    const list = itemsRef.value || [];
+    if (!canSelectItem) return list;
+    return list.filter((item) => canSelectItem(item));
+  });
 
   const selectedItems = computed(() =>
     (itemsRef.value || []).filter((item) => selectedSet.value.has(item.id)),
@@ -11,8 +17,8 @@ export function useSelection(itemsRef) {
 
   const allSelected = computed(
     () =>
-      (itemsRef.value || []).length > 0 &&
-      (itemsRef.value || []).every((item) => selectedSet.value.has(item.id)),
+      selectableItems.value.length > 0 &&
+      selectableItems.value.every((item) => selectedSet.value.has(item.id)),
   );
 
   const someSelected = computed(
@@ -36,7 +42,7 @@ export function useSelection(itemsRef) {
       selectedIds.value = [];
       return;
     }
-    selectedIds.value = (itemsRef.value || []).map((item) => item.id);
+    selectedIds.value = selectableItems.value.map((item) => item.id);
   }
 
   function clear() {

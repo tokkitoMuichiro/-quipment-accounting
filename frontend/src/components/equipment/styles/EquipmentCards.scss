@@ -80,6 +80,27 @@
   font-size: $font-size-xs;
 }
 
+.eq-card__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.eq-card__actions .btn {
+  flex: 1;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: $font-size-xs;
+}
+
+.eq-card.is-pending {
+  border-color: $color-dodger;
+  background: #f4f9ff;
+}
+
+.eq-card__pending {
+  flex-wrap: wrap;
+}
+
 .eq-card__meta {
   display: grid;
   gap: 5px;
