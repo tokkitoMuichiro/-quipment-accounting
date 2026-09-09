@@ -2,42 +2,70 @@
   <section>
     <PageHeader
       title="Оборудование у сотрудников"
-      subtitle="Выберите сотрудника, чтобы увидеть закреплённое за ним оборудование"
+      subtitle="Сотрудники с закреплённым оборудованием — откройте карточку, чтобы увидеть список"
     />
-    <div class="filters">
-      <select v-model="userId" aria-label="Сотрудник">
-        <option value="">Выберите сотрудника</option>
-        <option v-for="u in users" :key="u.id" :value="u.id">{{ u.fullName }}</option>
-      </select>
-      <input
-        v-model="query"
-        :disabled="!userId"
-        placeholder="Поиск по названию или номеру"
-      />
-      <select v-model="condition" :disabled="!userId">
-        <option value="">Все состояния</option>
-        <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
-          {{ opt.label }}
-        </option>
-      </select>
-    </div>
+
     <p v-if="error" class="alert">{{ error }}</p>
-    <p v-if="loading" class="muted">Загрузка…</p>
-    <EquipmentBoard
-      v-if="userId && !loading"
-      :items="filtered"
-      :selectable="canSelect"
-      :is-selected="isSelected"
-      :all-selected="allSelected"
-      :some-selected="someSelected"
-      @transfer="openTransfer([$event])"
-      @edit="editItem = $event"
-      @remove="removeItem"
-      @toggle="toggle"
-      @toggle-all="toggleAll"
-      @updated="load"
-    />
-    <p v-if="!userId" class="empty card">Выберите сотрудника, чтобы открыть его список.</p>
+    <p v-if="usersLoading" class="muted">Загрузка сотрудников…</p>
+
+    <div v-else-if="peopleWithEquipment.length" class="people-tiles">
+      <button
+        v-for="u in peopleWithEquipment"
+        :key="u.id"
+        type="button"
+        class="people-tile"
+        :class="{ 'people-tile--active': userId === u.id }"
+        @click="selectUser(u.id)"
+      >
+        <span class="people-tile__name">{{ u.fullName }}</span>
+        <span class="people-tile__meta">
+          <span v-if="u.role?.name" class="people-tile__role">{{ u.role.name }}</span>
+          <span class="people-tile__count">{{ equipmentCountLabel(u) }}</span>
+        </span>
+      </button>
+    </div>
+    <p v-else-if="!usersLoading" class="empty card">
+      Пока ни у кого нет закреплённого оборудования.
+    </p>
+
+    <template v-if="userId">
+      <div class="filters people-filters">
+        <div class="people-filters__who">
+          <span class="people-filters__label">Сейчас:</span>
+          <strong>{{ selectedUserName }}</strong>
+          <button type="button" class="btn btn--small btn--ghost" @click="selectUser('')">
+            Сбросить
+          </button>
+        </div>
+        <input v-model="query" placeholder="Поиск по названию или номеру" />
+        <select v-model="condition" aria-label="Состояние">
+          <option value="">Все состояния</option>
+          <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+      </div>
+
+      <p v-if="loading" class="muted">Загрузка…</p>
+      <EquipmentBoard
+        v-if="!loading"
+        :items="filtered"
+        :selectable="canSelect"
+        :is-selected="isSelected"
+        :all-selected="allSelected"
+        :some-selected="someSelected"
+        @transfer="openTransfer([$event])"
+        @edit="editItem = $event"
+        @remove="removeItem"
+        @toggle="toggle"
+        @toggle-all="toggleAll"
+        @updated="onEquipmentUpdated"
+      />
+      <p v-if="!loading && !filtered.length" class="empty card">
+        У этого сотрудника нет позиций по текущему фильтру.
+      </p>
+    </template>
+
     <SelectionBar
       :count="selectedItems.length"
       :can-transfer="canTransferSelected"
@@ -62,6 +90,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import './styles/PeopleEquipmentView.scss';
 import { fetchUsers } from '../api/catalog';
 import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
@@ -83,9 +112,20 @@ const query = ref('');
 const condition = ref('');
 const error = ref('');
 const loading = ref(false);
+const usersLoading = ref(false);
 const userId = ref(route.query.userId || '');
 const editItem = ref(null);
 const transferItems = ref([]);
+
+const peopleWithEquipment = computed(() =>
+  users.value
+    .filter((u) => (u._count?.equipment ?? 0) > 0)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru')),
+);
+
+const selectedUserName = computed(
+  () => users.value.find((u) => u.id === userId.value)?.fullName || 'Сотрудник',
+);
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -96,6 +136,7 @@ const filtered = computed(() => {
     return okQuery && okCond;
   });
 });
+
 const {
   selectedItems,
   allSelected,
@@ -106,13 +147,35 @@ const {
   clear,
   selectedIds,
 } = useSelection(filtered, (item) => canTransferItem(auth, item));
+
 const canSelect = computed(() => filtered.value.some((item) => canTransferItem(auth, item)));
 const canTransferSelected = computed(
-  () => selectedItems.value.length > 0 && selectedItems.value.every((item) => canTransferItem(auth, item)),
+  () =>
+    selectedItems.value.length > 0 &&
+    selectedItems.value.every((item) => canTransferItem(auth, item)),
 );
 
+function equipmentCountLabel(u) {
+  const n = u._count?.equipment ?? 0;
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  let word = 'позиций';
+  if (mod10 === 1 && mod100 !== 11) word = 'позиция';
+  else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) word = 'позиции';
+  return `${n} ${word}`;
+}
+
+function selectUser(id) {
+  userId.value = id;
+}
+
 async function loadUsers() {
-  users.value = await fetchUsers();
+  usersLoading.value = true;
+  try {
+    users.value = await fetchUsers();
+  } finally {
+    usersLoading.value = false;
+  }
 }
 
 async function load() {
@@ -139,7 +202,7 @@ async function removeItem(item) {
   if (!confirm(`Удалить «${item.name}» из учёта?`)) return;
   try {
     await removeEquipment(item.id);
-    await load();
+    await onEquipmentUpdated();
   } catch (e) {
     error.value = e.message;
   }
@@ -149,17 +212,23 @@ function openTransfer(list) {
   transferItems.value = list;
 }
 
-function onSaved() {
+async function onEquipmentUpdated() {
+  await Promise.all([load(), loadUsers()]);
+}
+
+async function onSaved() {
   editItem.value = null;
   transferItems.value = [];
   clear();
-  load();
+  await onEquipmentUpdated();
 }
 
 watch(userId, (id) => {
   const next = id ? { userId: id } : {};
   router.replace({ query: next });
   clear();
+  query.value = '';
+  condition.value = '';
   load();
 });
 
