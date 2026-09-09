@@ -3,13 +3,14 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Patch,
   Post,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -25,6 +26,26 @@ class DevLoginDto {
   @IsOptional()
   @IsString()
   email?: string;
+
+  /** admin | master | keeper — только при DEV_AUTH */
+  @IsOptional()
+  @IsString()
+  roleSlug?: string;
+
+  @IsOptional()
+  @IsString()
+  bitrixUserId?: string;
+}
+
+class NotifySettingsDto {
+  @IsBoolean()
+  notifyBitrix: boolean;
+}
+
+class ExchangeDto {
+  @IsString()
+  @MinLength(16)
+  code: string;
 }
 
 @Controller('auth')
@@ -34,10 +55,42 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  @Get('dev-status')
+  devStatus() {
+    const enabled =
+      this.config.get('DEV_AUTH') === 'true' && !isProductionEnv(this.config);
+    return { enabled };
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser) {
     return this.auth.serialize(user);
+  }
+
+  @Patch('me/settings')
+  @UseGuards(JwtAuthGuard)
+  updateSettings(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: NotifySettingsDto,
+  ) {
+    return this.auth.updateNotifyBitrix(user.id, dto.notifyBitrix);
+  }
+
+  @Post('exchange')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  async exchange(
+    @Body() dto: ExchangeDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const userId = this.auth.consumeExchangeCode(dto.code);
+    const user = await this.auth.loadUser(userId);
+    if (!user) {
+      throw new ForbiddenException('Пользователь не найден');
+    }
+    const token = this.auth.signToken(user.id);
+    this.auth.setAuthCookie(res, token);
+    return { user: this.auth.serialize(user) };
   }
 
   @Post('dev-login')
@@ -50,17 +103,29 @@ export class AuthController {
       throw new ForbiddenException('Локальный вход выключен');
     }
 
-    const slug = dto.fullName.trim().toLowerCase().replace(/\s+/g, '-');
-    const user = await this.auth.upsertFromBitrix({
-      bitrixUserId: `dev:${slug}`,
-      fullName: dto.fullName.trim(),
-      email: dto.email ?? null,
-    });
+    const fullName = dto.fullName.trim();
+    const nameSlug = fullName.toLowerCase().replace(/\s+/g, '-');
+    const bitrixUserId = (dto.bitrixUserId || `dev:${nameSlug}`).trim();
+    const allowedRoles = new Set(['admin', 'master', 'keeper']);
+    const roleSlug =
+      dto.roleSlug && allowedRoles.has(dto.roleSlug) ? dto.roleSlug : null;
+
+    const user = roleSlug
+      ? await this.auth.upsertDevUser({
+          bitrixUserId,
+          fullName,
+          roleSlug,
+          email: dto.email ?? null,
+        })
+      : await this.auth.upsertFromBitrix({
+          bitrixUserId,
+          fullName,
+          email: dto.email ?? null,
+        });
 
     const token = this.auth.signToken(user.id);
     this.auth.setAuthCookie(res, token);
     return {
-      token,
       user: this.auth.serialize(user),
     };
   }

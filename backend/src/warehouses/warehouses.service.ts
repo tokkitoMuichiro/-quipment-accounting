@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth-user';
+import { hasPermission } from '../common/permissions';
 import { CreateWarehouseDto, UpdateWarehouseDto } from './warehouses.dto';
 import { REPAIR_WAREHOUSE_NAME, REPAIR_WAREHOUSE_SLUG } from './repair-warehouse';
 
@@ -39,56 +40,71 @@ export class WarehousesService {
     });
   }
 
-  async get(id: string, _user: AuthUser) {
+  async get(id: string, user: AuthUser) {
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id },
       include: {
         keepers: { include: { user: true } },
-        equipment: {
-          include: {
-            ownerUser: true,
-            ownerWarehouse: true,
-            pendingTransfer: {
-              include: { actor: { select: { id: true, fullName: true } } },
-            },
-          },
-          orderBy: { name: 'asc' },
-        },
       },
     });
     if (!warehouse) {
       throw new NotFoundException('Производственная база не найдена');
     }
 
-    if (warehouse.slug !== REPAIR_WAREHOUSE_SLUG || !warehouse.equipment.length) {
-      return warehouse;
-    }
+    const equipmentInclude = {
+      ownerUser: true,
+      ownerWarehouse: true,
+      pendingTransfer: {
+        include: { actor: { select: { id: true, fullName: true } } },
+      },
+    } as const;
 
-    const equipmentIds = warehouse.equipment.map((item) => item.id);
-    const inbound = await this.prisma.transfer.findMany({
-      where: {
-        status: 'COMPLETED',
-        toWarehouseId: warehouse.id,
-        equipmentId: { in: equipmentIds },
-      },
-      include: {
-        actor: { select: { id: true, fullName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
+    const owned = await this.prisma.equipment.findMany({
+      where: { ownerType: 'WAREHOUSE', ownerWarehouseId: id },
+      include: equipmentInclude,
+      orderBy: { name: 'asc' },
     });
 
-    const latestByEquipment = new Map<
-      string,
-      (typeof inbound)[number]
-    >();
-    for (const row of inbound) {
-      if (!row.equipmentId || latestByEquipment.has(row.equipmentId)) continue;
-      latestByEquipment.set(row.equipmentId, row);
-    }
+    const pendingInbound = await this.prisma.equipment.findMany({
+      where: {
+        pendingTransfer: {
+          is: { status: 'PENDING', toWarehouseId: id },
+        },
+      },
+      include: equipmentInclude,
+      orderBy: { name: 'asc' },
+    });
 
-    return {
-      ...warehouse,
-      equipment: warehouse.equipment.map((item) => {
+    const byId = new Map<string, (typeof owned)[number]>();
+    for (const item of owned) byId.set(item.id, item);
+    for (const item of pendingInbound) {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    }
+    let equipment = [...byId.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, 'ru'),
+    );
+
+    if (warehouse.slug === REPAIR_WAREHOUSE_SLUG && equipment.length) {
+      const equipmentIds = equipment.map((item) => item.id);
+      const inbound = await this.prisma.transfer.findMany({
+        where: {
+          status: 'COMPLETED',
+          toWarehouseId: warehouse.id,
+          equipmentId: { in: equipmentIds },
+        },
+        include: {
+          actor: { select: { id: true, fullName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const latestByEquipment = new Map<string, (typeof inbound)[number]>();
+      for (const row of inbound) {
+        if (!row.equipmentId || latestByEquipment.has(row.equipmentId)) continue;
+        latestByEquipment.set(row.equipmentId, row);
+      }
+
+      equipment = equipment.map((item) => {
         const last = latestByEquipment.get(item.id);
         return {
           ...item,
@@ -98,8 +114,44 @@ export class WarehousesService {
           sentToRepairFrom: last?.fromLabel || null,
           sentToRepairAt: last?.createdAt || null,
         };
-      }),
+      }) as typeof equipment;
+    }
+
+    const canSeeComment = (item: { ownerUserId?: string | null }) =>
+      hasPermission(
+        Array.isArray(user.role.permissions)
+          ? (user.role.permissions as string[])
+          : [],
+        'manage_roles',
+      ) || item.ownerUserId === user.id;
+
+    return {
+      ...warehouse,
+      equipment: this.sortByFillPriority(equipment).map((item) =>
+        canSeeComment(item) ? item : { ...item, fillComment: null },
+      ),
     };
+  }
+
+  private sortByFillPriority<
+    T extends {
+      fillStatus?: string | null;
+      name: string;
+      factoryNumber?: string | null;
+    },
+  >(items: T[]): T[] {
+    const rank = (status?: string | null) => {
+      if (status === 'NEEDS_FIX') return 0;
+      if (status === 'PENDING_REVIEW') return 1;
+      return 2;
+    };
+    return [...items].sort((a, b) => {
+      const byFill = rank(a.fillStatus) - rank(b.fillStatus);
+      if (byFill !== 0) return byFill;
+      const byName = a.name.localeCompare(b.name, 'ru');
+      if (byName !== 0) return byName;
+      return (a.factoryNumber || '').localeCompare(b.factoryNumber || '', 'ru');
+    });
   }
 
   create(dto: CreateWarehouseDto) {

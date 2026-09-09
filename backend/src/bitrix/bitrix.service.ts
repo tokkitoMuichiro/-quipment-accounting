@@ -1,7 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
+import { deriveSecretKey, openSecret, sealSecret } from '../common/secret-box';
+import { isProductionEnv } from '../auth/jwt-secret';
 
 type BitrixAuthPayload = {
   accessToken?: string;
@@ -9,18 +16,32 @@ type BitrixAuthPayload = {
   domain?: string;
   memberId?: string;
   clientEndpoint?: string;
+  applicationToken?: string;
 };
+
+const BITRIX_DOMAIN_RE =
+  /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+bitrix24\.(ru|com|by|kz|ua|eu|[a-z]{2})$/i;
 
 @Injectable()
 export class BitrixService {
   private readonly logger = new Logger(BitrixService.name);
+  private readonly cryptoKey: Buffer;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {}
+  ) {
+    const raw =
+      this.config.get<string>('BITRIX_TOKEN_KEY') ||
+      this.config.get<string>('JWT_SECRET') ||
+      'dev-only-insecure-key';
+    this.cryptoKey = deriveSecretKey(raw);
+  }
 
-  parseIncoming(body: Record<string, any>, query: Record<string, any>): BitrixAuthPayload {
+  parseIncoming(
+    body: Record<string, any>,
+    query: Record<string, any>,
+  ): BitrixAuthPayload {
     const src = { ...query, ...body };
     const auth = src.auth && typeof src.auth === 'object' ? src.auth : {};
 
@@ -44,10 +65,17 @@ export class BitrixService {
     )
       .toString()
       .replace(/^https?:\/\//, '')
-      .replace(/\/$/, '');
+      .replace(/\/$/, '')
+      .toLowerCase();
 
     const memberId = auth.member_id || src.member_id || src.memberId || domain;
     const clientEndpoint = auth.client_endpoint || src.client_endpoint;
+    const applicationToken =
+      auth.application_token ||
+      src.application_token ||
+      src.APP_SID ||
+      src.app_sid ||
+      undefined;
 
     return {
       accessToken,
@@ -55,27 +83,94 @@ export class BitrixService {
       domain,
       memberId,
       clientEndpoint,
+      applicationToken,
     };
+  }
+
+  assertSafePayload(payload: BitrixAuthPayload) {
+    if (!payload.domain) {
+      throw new BadRequestException('Не указан домен Битрикс24');
+    }
+    this.assertAllowedDomain(payload.domain);
+    this.assertApplicationToken(payload.applicationToken);
+  }
+
+  assertAllowedDomain(domain: string) {
+    const host = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .toLowerCase();
+    if (!BITRIX_DOMAIN_RE.test(host) || host.includes('..')) {
+      throw new BadRequestException('Недопустимый домен Битрикс24');
+    }
+  }
+
+  private assertApplicationToken(incoming?: string) {
+    const expected = (
+      this.config.get<string>('BITRIX_APPLICATION_TOKEN') || ''
+    ).trim();
+    if (!expected) {
+      if (isProductionEnv(this.config)) {
+        throw new UnauthorizedException(
+          'BITRIX_APPLICATION_TOKEN не задан на сервере',
+        );
+      }
+      this.logger.warn(
+        'BITRIX_APPLICATION_TOKEN пуст — проверка application_token пропущена (только dev)',
+      );
+      return;
+    }
+    if (!incoming || incoming !== expected) {
+      throw new UnauthorizedException('Неверный application_token Битрикс24');
+    }
+  }
+
+  private seal(value: string) {
+    return sealSecret(value, this.cryptoKey);
+  }
+
+  private open(value: string) {
+    return openSecret(value, this.cryptoKey);
+  }
+
+  decryptPortal<T extends { accessToken: string; refreshToken: string }>(
+    portal: T,
+  ): T {
+    return {
+      ...portal,
+      accessToken: this.open(portal.accessToken),
+      refreshToken: this.open(portal.refreshToken),
+    };
+  }
+
+  async getLatestPortal() {
+    const portal = await this.prisma.bitrixPortal.findFirst({
+      orderBy: { updatedAt: 'desc' },
+    });
+    return portal ? this.decryptPortal(portal) : null;
   }
 
   async savePortal(payload: BitrixAuthPayload) {
     if (!payload.memberId || !payload.domain || !payload.accessToken) {
       return null;
     }
+    this.assertAllowedDomain(payload.domain);
 
     return this.prisma.bitrixPortal.upsert({
       where: { memberId: payload.memberId },
       create: {
         memberId: payload.memberId,
         domain: payload.domain,
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken || '',
+        accessToken: this.seal(payload.accessToken),
+        refreshToken: this.seal(payload.refreshToken || ''),
         clientEndpoint: payload.clientEndpoint,
       },
       update: {
         domain: payload.domain,
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken || undefined,
+        accessToken: this.seal(payload.accessToken),
+        refreshToken: payload.refreshToken
+          ? this.seal(payload.refreshToken)
+          : undefined,
         clientEndpoint: payload.clientEndpoint,
       },
     });
@@ -94,6 +189,7 @@ export class BitrixService {
     if (!domain || !accessToken || !handler.startsWith('https://')) {
       return;
     }
+    this.assertAllowedDomain(domain);
     try {
       await this.call(
         domain,
@@ -123,6 +219,7 @@ export class BitrixService {
     params: Record<string, unknown>,
     accessToken: string,
   ) {
+    this.assertAllowedDomain(domain);
     const url = `https://${domain}/rest/${method}.json`;
     const { data } = await axios.post(
       url,
@@ -146,16 +243,19 @@ export class BitrixService {
   }) {
     const clientId = this.config.get<string>('BITRIX_CLIENT_ID');
     const clientSecret = this.config.get<string>('BITRIX_CLIENT_SECRET');
-    if (!clientId || !clientSecret || !portal.refreshToken) {
+    const refreshToken = this.open(portal.refreshToken);
+    if (!clientId || !clientSecret || !refreshToken) {
       return null;
     }
+
+    this.assertAllowedDomain(portal.domain);
 
     const { data } = await axios.get('https://oauth.bitrix.info/oauth/token/', {
       params: {
         grant_type: 'refresh_token',
         client_id: clientId,
         client_secret: clientSecret,
-        refresh_token: portal.refreshToken,
+        refresh_token: refreshToken,
       },
       timeout: 15000,
     });
@@ -165,14 +265,15 @@ export class BitrixService {
       return null;
     }
 
-    return this.prisma.bitrixPortal.update({
+    const updated = await this.prisma.bitrixPortal.update({
       where: { id: portal.id },
       data: {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token || portal.refreshToken,
+        accessToken: this.seal(data.access_token),
+        refreshToken: this.seal(data.refresh_token || refreshToken),
         domain: data.domain || portal.domain,
       },
     });
+    return this.decryptPortal(updated);
   }
 
   async callWithPortal(
@@ -185,8 +286,9 @@ export class BitrixService {
     method: string,
     params: Record<string, unknown> = {},
   ) {
+    const opened = this.decryptPortal(portal);
     try {
-      return await this.call(portal.domain, method, params, portal.accessToken);
+      return await this.call(opened.domain, method, params, opened.accessToken);
     } catch (error: any) {
       const code = error?.bitrix?.error;
       if (code === 'expired_token' || code === 'INVALID_TOKEN') {
@@ -236,7 +338,8 @@ export class BitrixService {
 
     return result.map((u) => ({
       bitrixUserId: String(u.ID),
-      fullName: [u.LAST_NAME, u.NAME, u.SECOND_NAME].filter(Boolean).join(' ').trim() ||
+      fullName:
+        [u.LAST_NAME, u.NAME, u.SECOND_NAME].filter(Boolean).join(' ').trim() ||
         u.EMAIL ||
         `Сотрудник ${u.ID}`,
       email: u.EMAIL || null,

@@ -64,11 +64,16 @@ const list = computed(() => (props.items.length ? props.items : props.item ? [pr
 const title = computed(() =>
   list.value.length > 1 ? `Передать ${list.value.length} позиций` : `Передать: ${list.value[0]?.name || ''}`,
 );
-const hint = computed(() =>
-  form.toOwnerType === 'USER'
-    ? 'Сотрудник должен нажать «Принять» по каждой позиции. До этого оборудование остаётся у вас в статусе «Ждёт принятия».'
-    : 'На производственную базу оборудование переходит сразу.',
-);
+const hint = computed(() => {
+  if (form.toOwnerType === 'USER') {
+    return 'Сотрудник должен нажать «Принять» по каждой позиции. До этого оборудование остаётся у вас в статусе «Ждёт принятия».';
+  }
+  const selected = warehouses.value.find((w) => w.id === form.toWarehouseId);
+  if (selected?.slug === 'repair') {
+    return 'На базу «Ремонт» оборудование переходит сразу.';
+  }
+  return 'Кладовщик этой базы должен нажать «Принять». До этого оборудование остаётся у вас в статусе «Ждёт принятия». База «Ремонт» — исключение: туда передача мгновенная.';
+});
 
 const people = ref([]);
 const warehouses = ref([]);

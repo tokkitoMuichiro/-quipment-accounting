@@ -97,6 +97,28 @@
   background: #f4f9ff;
 }
 
+.eq-card.is-fill-fix {
+  border-color: $color-bad;
+  background: #fff1f1;
+}
+
+.eq-card.is-fill-review {
+  border-color: $color-warn;
+  background: #fff8e8;
+}
+
+.eq-fill {
+  margin-top: 6px;
+}
+
+.eq-fill__comment {
+  margin-top: 4px;
+  color: $color-bad;
+  font-size: $font-size-xs;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .eq-card__pending {
   flex-wrap: wrap;
 }

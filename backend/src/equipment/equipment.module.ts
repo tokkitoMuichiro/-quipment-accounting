@@ -4,9 +4,10 @@ import { EquipmentController } from './equipment.controller';
 import { TransfersController } from './transfers.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ExcelModule } from '../excel/excel.module';
+import { BitrixModule } from '../bitrix/bitrix.module';
 
 @Module({
-  imports: [AuthModule, ExcelModule],
+  imports: [AuthModule, ExcelModule, BitrixModule],
   providers: [EquipmentService],
   controllers: [EquipmentController, TransfersController],
 })

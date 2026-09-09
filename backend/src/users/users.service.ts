@@ -1,17 +1,29 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthUser, isAdmin } from '../common/auth-user';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list() {
+  list(viewer: AuthUser) {
+    if (isAdmin(viewer)) {
+      return this.prisma.user.findMany({
+        orderBy: { fullName: 'asc' },
+        include: {
+          role: true,
+          keepers: { include: { warehouse: true } },
+          _count: { select: { equipment: true } },
+        },
+      });
+    }
+
     return this.prisma.user.findMany({
       orderBy: { fullName: 'asc' },
-      include: {
-        role: true,
-        keepers: { include: { warehouse: true } },
-        _count: { select: { equipment: true } },
+      select: {
+        id: true,
+        fullName: true,
+        role: { select: { id: true, name: true, slug: true } },
       },
     });
   }

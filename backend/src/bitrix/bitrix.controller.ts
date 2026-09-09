@@ -30,6 +30,7 @@ export class BitrixController {
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   async install(@Req() req: Request, @Res() res: Response) {
     const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
+    this.bitrix.assertSafePayload(payload);
     await this.bitrix.savePortal(payload);
     if (payload.domain && payload.accessToken) {
       await this.bitrix.bindLeftMenu(payload.domain, payload.accessToken);
@@ -39,7 +40,10 @@ export class BitrixController {
     res
       .status(200)
       .type('html')
-      .setHeader('Content-Security-Policy', "frame-ancestors https://*.bitrix24.ru https://*.bitrix24.com https://*.bitrix24.by https://*.bitrix24.kz https://*.bitrix24.ua")
+      .setHeader(
+        'Content-Security-Policy',
+        "frame-ancestors https://*.bitrix24.ru https://*.bitrix24.com https://*.bitrix24.by https://*.bitrix24.kz https://*.bitrix24.ua",
+      )
       .send(
         `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Установка</title>
         <script src="https://api.bitrix24.com/api/v1/"></script></head>
@@ -73,6 +77,7 @@ export class BitrixController {
     if (!payload.accessToken || !payload.domain) {
       throw new BadRequestException('Нет данных авторизации Битрикс24');
     }
+    this.bitrix.assertSafePayload(payload);
 
     await this.bitrix.savePortal(payload);
 
@@ -95,8 +100,9 @@ export class BitrixController {
 
     const token = this.auth.signToken(user.id);
     this.auth.setAuthCookie(res, token);
+    const code = this.auth.createExchangeCode(user.id);
     const frontend = this.config.get<string>('FRONTEND_URL') || '/';
-    const url = `${frontend.replace(/\/$/, '')}/#token=${encodeURIComponent(token)}`;
+    const url = `${frontend.replace(/\/$/, '')}/?code=${encodeURIComponent(code)}`;
     res.redirect(302, url);
   }
 
@@ -104,9 +110,7 @@ export class BitrixController {
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('manage_roles')
   async employees() {
-    const portal = await this.prisma.bitrixPortal.findFirst({
-      orderBy: { updatedAt: 'desc' },
-    });
+    const portal = await this.bitrix.getLatestPortal();
 
     if (!portal) {
       const locals = await this.prisma.user.findMany({

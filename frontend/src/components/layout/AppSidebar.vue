@@ -17,6 +17,16 @@
     <div class="sidebar__user">
       <strong>{{ auth.user?.fullName }}</strong>
       <span>{{ auth.user?.role?.name }}</span>
+      <label class="sidebar__notify">
+        <input
+          class="checkbox"
+          type="checkbox"
+          :checked="auth.user?.notifyBitrix !== false"
+          :disabled="notifySaving"
+          @change="onNotifyToggle($event.target.checked)"
+        />
+        Уведомления в Битрикс
+      </label>
       <div class="toolbar sidebar__actions">
         <button
           v-if="auth.can('export_excel')"
@@ -31,13 +41,16 @@
         </button>
       </div>
       <p v-if="syncMsg" class="sidebar__hint">{{ syncMsg }}</p>
+      <p v-if="notifyMsg" class="sidebar__hint">{{ notifyMsg }}</p>
     </div>
   </aside>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import AmmirLogo from '../brand/AmmirLogo.vue';
 import { useAuthStore } from '../../stores/auth';
+import { api } from '../../api/client';
 import './styles/AppSidebar.scss';
 
 defineProps({
@@ -48,4 +61,25 @@ defineProps({
 defineEmits(['navigate', 'download-excel', 'logout']);
 
 const auth = useAuthStore();
+const notifySaving = ref(false);
+const notifyMsg = ref('');
+
+async function onNotifyToggle(enabled) {
+  notifySaving.value = true;
+  notifyMsg.value = '';
+  try {
+    const user = await api('/auth/me/settings', {
+      method: 'PATCH',
+      body: { notifyBitrix: enabled },
+    });
+    auth.user = user;
+    notifyMsg.value = enabled
+      ? 'Уведомления включены'
+      : 'Уведомления выключены';
+  } catch (e) {
+    notifyMsg.value = e.message;
+  } finally {
+    notifySaving.value = false;
+  }
+}
 </script>

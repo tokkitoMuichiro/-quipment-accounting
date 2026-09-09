@@ -10,6 +10,18 @@
   gap: 22px;
 }
 
+@include desktop {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 .sidebar__overlay {
   display: none;
 }
@@ -60,6 +72,22 @@
 .sidebar__user span {
   color: $color-steel-muted;
   font-size: $font-size-sm;
+}
+
+.sidebar__notify {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: $color-lavender;
+  font-size: $font-size-sm;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar__notify .checkbox {
+  width: 16px;
+  height: 16px;
 }
 
 .sidebar__actions {

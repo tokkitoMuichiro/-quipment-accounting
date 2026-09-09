@@ -18,6 +18,8 @@
       @toggle-all="$emit('toggle-all')"
       @condition-change="onConditionChange"
       @documents-change="onDocumentsChange"
+      @flag-fill="onFlagFill"
+      @confirm-fill="onConfirmFill"
     />
     <EquipmentCards
       :items="items"
@@ -37,6 +39,8 @@
       @toggle-all="$emit('toggle-all')"
       @condition-change="onConditionChange"
       @documents-change="onDocumentsChange"
+      @flag-fill="onFlagFill"
+      @confirm-fill="onConfirmFill"
     />
     <ConditionNoteModal
       v-if="pending"
@@ -54,9 +58,9 @@ import EquipmentTable from './EquipmentTable.vue';
 import EquipmentCards from './EquipmentCards.vue';
 import ConditionNoteModal from './ConditionNoteModal.vue';
 import './styles/EquipmentBoard.scss';
-import { acceptTransfer, cancelPendingTransfer, updateEquipment } from '../../api/equipment';
+import { acceptTransfer, cancelPendingTransfer, confirmFill, flagFill, updateEquipment } from '../../api/equipment';
 import { useAuthStore } from '../../stores/auth';
-import { canEditDocumentsItem } from '../../utils/access';
+import { canEditDocumentsItem, canEditItemCard } from '../../utils/access';
 
 defineProps({
   items: { type: Array, default: () => [] },
@@ -91,7 +95,7 @@ async function onDocumentsChange({ item, hasDocuments }) {
     bumpDocsNonce();
     return;
   }
-  if (!canEditDocumentsItem(auth, item)) {
+  if (!canEditDocumentsItem(auth, item) && !canEditItemCard(auth, item)) {
     bumpDocsNonce();
     return;
   }
@@ -133,6 +137,34 @@ async function onCancelPending(item) {
   if (!window.confirm(`Отменить передачу «${item.name}» — ${to}?`)) return;
   try {
     await cancelPendingTransfer(item.id);
+    emit('updated');
+  } catch (e) {
+    window.alert(e.message);
+  }
+}
+
+async function onFlagFill(item) {
+  const comment = window.prompt(
+    `Замечание по заполнению «${item.name}» (увидит владелец):`,
+    item.fillComment || '',
+  );
+  if (comment == null) return;
+  if (comment.trim().length < 3) {
+    window.alert('Укажите комментарий не короче 3 символов');
+    return;
+  }
+  try {
+    await flagFill(item.id, comment.trim());
+    emit('updated');
+  } catch (e) {
+    window.alert(e.message);
+  }
+}
+
+async function onConfirmFill(item) {
+  if (!window.confirm(`Подтвердить заполнение «${item.name}»?`)) return;
+  try {
+    await confirmFill(item.id);
     emit('updated');
   } catch (e) {
     window.alert(e.message);
