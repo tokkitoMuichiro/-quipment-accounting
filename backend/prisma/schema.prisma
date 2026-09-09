@@ -138,14 +138,15 @@ model Transfer {
 }
 
 model BitrixPortal {
-  id             String   @id @default(uuid())
-  memberId       String   @unique
-  domain         String
-  accessToken    String
-  refreshToken   String
-  clientEndpoint String?
-  excelFileId    String?
-  excelFolderId  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(uuid())
+  memberId          String   @unique
+  domain            String
+  accessToken       String
+  refreshToken      String
+  applicationToken  String?
+  clientEndpoint    String?
+  excelFileId       String?
+  excelFolderId     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

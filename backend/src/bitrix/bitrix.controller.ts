@@ -30,7 +30,7 @@ export class BitrixController {
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   async install(@Req() req: Request, @Res() res: Response) {
     const payload = this.bitrix.parseIncoming(req.body || {}, req.query as any);
-    this.bitrix.assertSafePayload(payload);
+    await this.bitrix.assertSafePayload(payload);
     await this.bitrix.savePortal(payload);
     if (payload.domain && payload.accessToken) {
       await this.bitrix.bindLeftMenu(payload.domain, payload.accessToken);
@@ -77,7 +77,7 @@ export class BitrixController {
     if (!payload.accessToken || !payload.domain) {
       throw new BadRequestException('Нет данных авторизации Битрикс24');
     }
-    this.bitrix.assertSafePayload(payload);
+    await this.bitrix.assertSafePayload(payload);
 
     await this.bitrix.savePortal(payload);
 

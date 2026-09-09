@@ -87,12 +87,12 @@ export class BitrixService {
     };
   }
 
-  assertSafePayload(payload: BitrixAuthPayload) {
+  async assertSafePayload(payload: BitrixAuthPayload) {
     if (!payload.domain) {
       throw new BadRequestException('Не указан домен Битрикс24');
     }
     this.assertAllowedDomain(payload.domain);
-    this.assertApplicationToken(payload.applicationToken);
+    await this.assertApplicationToken(payload);
   }
 
   assertAllowedDomain(domain: string) {
@@ -105,24 +105,56 @@ export class BitrixService {
     }
   }
 
-  private assertApplicationToken(incoming?: string) {
-    const expected = (
+  /**
+   * Проверка application_token:
+   * 1) BITRIX_APPLICATION_TOKEN в .env — если задан;
+   * 2) иначе токен, сохранённый в BitrixPortal после первой установки;
+   * 3) иначе принимаем токен из запроса Битрикс (первичная привязка) и сохраняем его в savePortal.
+   * В интерфейсе портала поле часто не показывают — Битрикс всё равно шлёт его в auth.
+   */
+  private async assertApplicationToken(payload: BitrixAuthPayload) {
+    const incoming = (payload.applicationToken || '').trim();
+    const fromEnv = (
       this.config.get<string>('BITRIX_APPLICATION_TOKEN') || ''
     ).trim();
-    if (!expected) {
-      if (isProductionEnv(this.config)) {
-        throw new UnauthorizedException(
-          'BITRIX_APPLICATION_TOKEN не задан на сервере',
-        );
+
+    if (fromEnv) {
+      if (!incoming || incoming !== fromEnv) {
+        throw new UnauthorizedException('Неверный application_token Битрикс24');
       }
+      return;
+    }
+
+    if (payload.memberId) {
+      const portal = await this.prisma.bitrixPortal.findUnique({
+        where: { memberId: payload.memberId },
+      });
+      const stored = portal?.applicationToken
+        ? this.open(portal.applicationToken).trim()
+        : '';
+      if (stored) {
+        if (!incoming || incoming !== stored) {
+          throw new UnauthorizedException('Неверный application_token Битрикс24');
+        }
+        return;
+      }
+    }
+
+    if (incoming) {
+      // Первая установка / ещё не сохраняли токен — доверяем запросу с домена Битрикс.
+      return;
+    }
+
+    if (!isProductionEnv(this.config)) {
       this.logger.warn(
-        'BITRIX_APPLICATION_TOKEN пуст — проверка application_token пропущена (только dev)',
+        'application_token отсутствует — проверка пропущена (только dev)',
       );
       return;
     }
-    if (!incoming || incoming !== expected) {
-      throw new UnauthorizedException('Неверный application_token Битрикс24');
-    }
+
+    throw new UnauthorizedException(
+      'Битрикс не передал application_token. Переустановите локальное приложение или задайте BITRIX_APPLICATION_TOKEN в .env',
+    );
   }
 
   private seal(value: string) {
@@ -133,13 +165,16 @@ export class BitrixService {
     return openSecret(value, this.cryptoKey);
   }
 
-  decryptPortal<T extends { accessToken: string; refreshToken: string }>(
+  decryptPortal<T extends { accessToken: string; refreshToken: string; applicationToken?: string | null }>(
     portal: T,
   ): T {
     return {
       ...portal,
       accessToken: this.open(portal.accessToken),
       refreshToken: this.open(portal.refreshToken),
+      applicationToken: portal.applicationToken
+        ? this.open(portal.applicationToken)
+        : portal.applicationToken,
     };
   }
 
@@ -156,6 +191,10 @@ export class BitrixService {
     }
     this.assertAllowedDomain(payload.domain);
 
+    const sealedAppToken = payload.applicationToken
+      ? this.seal(payload.applicationToken)
+      : undefined;
+
     return this.prisma.bitrixPortal.upsert({
       where: { memberId: payload.memberId },
       create: {
@@ -163,6 +202,7 @@ export class BitrixService {
         domain: payload.domain,
         accessToken: this.seal(payload.accessToken),
         refreshToken: this.seal(payload.refreshToken || ''),
+        applicationToken: sealedAppToken,
         clientEndpoint: payload.clientEndpoint,
       },
       update: {
@@ -171,6 +211,7 @@ export class BitrixService {
         refreshToken: payload.refreshToken
           ? this.seal(payload.refreshToken)
           : undefined,
+        applicationToken: sealedAppToken,
         clientEndpoint: payload.clientEndpoint,
       },
     });
