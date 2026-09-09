@@ -133,3 +133,23 @@
 .eq-table tr.is-pending td {
   background: #f4f9ff;
 }
+
+.eq-table tr.is-fill-fix td {
+  background: #fff1f1;
+}
+
+.eq-table tr.is-fill-review td {
+  background: #fff8e8;
+}
+
+.eq-fill {
+  margin-top: 4px;
+}
+
+.eq-fill__comment {
+  margin-top: 4px;
+  color: $color-bad;
+  font-size: $font-size-xs;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

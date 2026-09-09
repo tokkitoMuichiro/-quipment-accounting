@@ -7,7 +7,7 @@
       </label>
       <label>
         Тип
-        <select v-model="form.type" :disabled="Boolean(item)">
+        <select v-model="form.type" :disabled="typeLocked">
           <option value="SERIAL">Серийное (заводской номер)</option>
           <option value="CONSUMABLE">Неномерное (количество)</option>
         </select>
@@ -83,6 +83,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import AppModal from '../ui/AppModal.vue';
 import ConditionSelect from './ConditionSelect.vue';
+import { canEditItemCard } from '../../utils/access';
 import { fetchUsers, fetchWarehouses } from '../../api/catalog';
 import { createEquipment, updateEquipment } from '../../api/equipment';
 import { useAuthStore } from '../../stores/auth';
@@ -102,7 +103,15 @@ const error = ref('');
 const canAssignAnyone = computed(
   () => auth.can('view_all') || auth.can('manage_warehouses') || auth.can('manage_roles'),
 );
-const modalTitle = computed(() => (props.item ? 'Изменить карточку' : 'Новое оборудование'));
+const modalTitle = computed(() => {
+  if (!props.item) return 'Новое оборудование';
+  if (props.item.fillStatus === 'NEEDS_FIX') return 'Исправить карточку';
+  if (props.item.fillStatus === 'PENDING_REVIEW') return 'Дополнить карточку';
+  return 'Изменить карточку';
+});
+const typeLocked = computed(
+  () => Boolean(props.item) && !canEditItemCard(auth, props.item),
+);
 const needsNote = computed(() => conditionNeedsNote(form.condition));
 const assignableWarehouses = computed(() => {
   const list = warehouses.value.filter((w) => !w.isSystem);
@@ -154,7 +163,8 @@ async function submit() {
     if (props.item) {
       await updateEquipment(props.item.id, {
         name: form.name,
-        factoryNumber: form.type === 'SERIAL' ? form.factoryNumber : undefined,
+        type: form.type,
+        factoryNumber: form.type === 'SERIAL' ? form.factoryNumber : '',
         quantity: form.type === 'CONSUMABLE' ? form.quantity : 1,
       });
     } else {

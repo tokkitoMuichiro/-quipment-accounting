@@ -4,6 +4,10 @@ export function fetchEquipment(query = '') {
   return api(`/equipment${query}`);
 }
 
+export function fetchEquipmentAlerts() {
+  return api('/equipment/alerts');
+}
+
 export function createEquipment(body) {
   return api('/equipment', { method: 'POST', body });
 }
@@ -30,4 +34,12 @@ export function acceptTransfer(id) {
 
 export function cancelPendingTransfer(id) {
   return api(`/equipment/${id}/cancel-pending`, { method: 'POST' });
+}
+
+export function flagFill(id, comment) {
+  return api(`/equipment/${id}/flag-fill`, { method: 'POST', body: { comment } });
+}
+
+export function confirmFill(id) {
+  return api(`/equipment/${id}/confirm-fill`, { method: 'POST' });
 }

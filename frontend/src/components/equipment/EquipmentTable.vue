@@ -23,7 +23,16 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="item in items" :key="item.id" :class="{ 'is-selected': isSelected(item.id), 'is-pending': isPending(item) }">
+        <tr
+          v-for="item in items"
+          :key="item.id"
+          :class="{
+            'is-selected': isSelected(item.id),
+            'is-pending': isPending(item),
+            'is-fill-fix': isNeedsFix(item),
+            'is-fill-review': isPendingReview(item),
+          }"
+        >
           <td v-if="selectable" class="eq-col-check">
             <input
               class="checkbox"
@@ -37,6 +46,13 @@
           <td class="eq-col-name">
             <strong>{{ item.name }}</strong>
             <div class="muted">{{ typeLabel(item) }}</div>
+            <div v-if="isNeedsFix(item) || isPendingReview(item)" class="eq-fill">
+              <span
+                class="badge"
+                :class="isNeedsFix(item) ? 'badge--bad' : 'badge--warn'"
+              >{{ FILL_STATUS_LABEL[item.fillStatus] }}</span>
+              <div v-if="item.fillComment" class="eq-fill__comment">{{ item.fillComment }}</div>
+            </div>
           </td>
           <td class="eq-col-serial mono" :title="item.factoryNumber || undefined">
             {{ item.factoryNumber || '—' }}
@@ -102,9 +118,23 @@
               >
                 Передать
               </button>
+              <button
+                v-if="canFlag(item) && !isNeedsFix(item)"
+                class="btn btn--small btn--ghost"
+                @click="$emit('flag-fill', item)"
+              >
+                Замечание
+              </button>
+              <button
+                v-if="canConfirm(item)"
+                class="btn btn--small btn--accent"
+                @click="$emit('confirm-fill', item)"
+              >
+                ОК
+              </button>
               <IconActions
-                v-if="can('edit') || canDelete(item)"
-                :can-edit="can('edit')"
+                v-if="canEditCard(item) || canDelete(item)"
+                :can-edit="canEditCard(item)"
                 :can-delete="canDelete(item)"
                 @edit="$emit('edit', item)"
                 @remove="$emit('remove', item)"
@@ -124,14 +154,25 @@ import ConditionSelect from './ConditionSelect.vue';
 import './styles/EquipmentTable.scss';
 import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
-import { ownerLabel, pendingOfferLabel, repairSenderLabel, typeLabel } from '../../utils/format';
+import {
+  FILL_STATUS_LABEL,
+  ownerLabel,
+  pendingOfferLabel,
+  repairSenderLabel,
+  typeLabel,
+} from '../../utils/format';
 import {
   canAcceptTransfer,
   canCancelPendingTransfer,
   canChangeConditionItem,
+  canConfirmFill,
   canDeleteItem,
   canEditDocumentsItem,
+  canEditItemCard,
+  canFlagFill,
   canTransferItem,
+  isFillNeedsFix,
+  isFillPendingReview,
   isPendingAccept,
 } from '../../utils/access';
 
@@ -145,15 +186,31 @@ defineProps({
   docsNonce: { type: Number, default: 0 },
   showRepairSender: { type: Boolean, default: false },
 });
-defineEmits(['transfer', 'accept', 'cancel-pending', 'edit', 'remove', 'toggle', 'toggle-all', 'condition-change', 'documents-change']);
+defineEmits([
+  'transfer',
+  'accept',
+  'cancel-pending',
+  'edit',
+  'remove',
+  'toggle',
+  'toggle-all',
+  'condition-change',
+  'documents-change',
+  'flag-fill',
+  'confirm-fill',
+]);
 
 const auth = useAuthStore();
-const can = auth.can;
 const canTransfer = (item) => canTransferItem(auth, item);
 const canAccept = (item) => canAcceptTransfer(auth, item);
 const canCancel = (item) => canCancelPendingTransfer(auth, item);
 const isPending = (item) => isPendingAccept(item);
 const canChange = (item) => canChangeConditionItem(auth, item);
-const canEditDocs = (item) => canEditDocumentsItem(auth, item);
+const canEditDocs = (item) => canEditDocumentsItem(auth, item) || canEditItemCard(auth, item);
 const canDelete = (item) => canDeleteItem(auth, item);
+const canEditCard = (item) => canEditItemCard(auth, item);
+const canFlag = (item) => canFlagFill(auth, item);
+const canConfirm = (item) => canConfirmFill(auth, item);
+const isNeedsFix = (item) => isFillNeedsFix(item);
+const isPendingReview = (item) => isFillPendingReview(item);
 </script>

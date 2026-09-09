@@ -13,6 +13,8 @@
     <main class="content">
       <router-view />
     </main>
+    <EntryAlert />
+    <ScrollToTop />
   </div>
 </template>
 
@@ -24,6 +26,8 @@ import { useAuthStore } from '../stores/auth';
 import { api } from '../api/client';
 import AppTopbar from '../components/layout/AppTopbar.vue';
 import AppSidebar from '../components/layout/AppSidebar.vue';
+import ScrollToTop from '../components/ui/ScrollToTop.vue';
+import EntryAlert from '../components/ui/EntryAlert.vue';
 
 const auth = useAuthStore();
 const router = useRouter();

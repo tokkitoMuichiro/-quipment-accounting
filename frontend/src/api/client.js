@@ -1,41 +1,23 @@
-const TOKEN_KEY = 'equipment_token';
-
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token) {
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_KEY);
-  }
-}
-
-const SERVER_DOWN =
-  'Сервер ещё не запущен. Дождитесь в терминале backend строки «Nest application successfully started» и войдите снова.';
-
-async function parseError(res) {
-  try {
-    const data = await res.json();
-    const msg = data.message;
-    return Array.isArray(msg) ? msg.join(', ') : msg || 'Ошибка запроса';
-  } catch {
-    if (res.status >= 500) {
-      return SERVER_DOWN;
-    }
-    return 'Ошибка запроса';
-  }
-}
-
 export async function api(path, options = {}) {
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
-  const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+
+  const SERVER_DOWN =
+    'Сервер ещё не запущен. Дождитесь в терминале backend строки «Nest application successfully started» и войдите снова.';
+
+  async function parseError(res) {
+    try {
+      const data = await res.json();
+      const msg = data.message;
+      return Array.isArray(msg) ? msg.join(', ') : msg || 'Ошибка запроса';
+    } catch {
+      if (res.status >= 500) {
+        return SERVER_DOWN;
+      }
+      return 'Ошибка запроса';
+    }
   }
 
   let res;
@@ -54,7 +36,6 @@ export async function api(path, options = {}) {
   }
 
   if (res.status === 401) {
-    setToken(null);
     if (!window.location.pathname.startsWith('/login')) {
       window.location.href = '/login';
     }
@@ -74,4 +55,15 @@ export async function api(path, options = {}) {
     return res.json();
   }
   return res.blob();
+}
+
+/** @deprecated legacy localStorage token — cleared on boot */
+const TOKEN_KEY = 'equipment_token';
+
+export function clearLegacyToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
 }

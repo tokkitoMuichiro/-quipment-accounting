@@ -9,36 +9,103 @@
         В рабочем режиме приложение открывается из вкладки Битрикс24 и подставляет ФИО сотрудника
         автоматически.
       </p>
-      <form class="form-grid" @submit.prevent="submit">
-        <label>
-          Вход для локальной разработки
-          <input v-model="fullName" placeholder="Иван Петров" required minlength="2" />
-        </label>
-        <p v-if="error" class="alert">{{ error }}</p>
-        <button class="btn btn--accent" :disabled="loading">Войти</button>
-      </form>
+
+      <template v-if="devEnabled">
+        <div class="login__presets">
+          <p class="login__presets-title">Тестовый вход (только локально)</p>
+          <div class="login__presets-grid">
+            <button
+              v-for="p in presets"
+              :key="p.bitrixUserId"
+              type="button"
+              class="btn btn--ghost login__preset"
+              :disabled="loading"
+              @click="loginAs(p)"
+            >
+              <span class="login__preset-name">{{ p.fullName }}</span>
+              <span class="login__preset-role">{{ p.roleLabel }}</span>
+            </button>
+          </div>
+        </div>
+
+        <form class="form-grid" @submit.prevent="submit">
+          <label>
+            Или введите ФИО вручную
+            <input v-model="fullName" placeholder="Иван Петров" minlength="2" />
+          </label>
+          <p v-if="error" class="alert">{{ error }}</p>
+          <button class="btn btn--accent" :disabled="loading || fullName.trim().length < 2">
+            Войти
+          </button>
+        </form>
+      </template>
+      <p v-else-if="statusLoaded" class="login__prod-hint">
+        Откройте приложение из меню Битрикс24.
+      </p>
+      <p v-if="error && !devEnabled" class="alert">{{ error }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import './styles/LoginView.scss';
 import { useRouter } from 'vue-router';
+import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import AmmirLogo from '../components/brand/AmmirLogo.vue';
+
+const presets = [
+  {
+    fullName: 'Админ Тестов',
+    roleSlug: 'admin',
+    bitrixUserId: 'dev:admin-testov',
+    roleLabel: 'админ — роли, замечания, всё',
+  },
+  {
+    fullName: 'Мастер Иванов',
+    roleSlug: 'master',
+    bitrixUserId: 'dev:master-ivanov',
+    roleLabel: 'мастер — своё оборудование',
+  },
+  {
+    fullName: 'Мастер Сидоров',
+    roleSlug: 'master',
+    bitrixUserId: 'dev:master-sidorov',
+    roleLabel: 'второй мастер — передачи между людьми',
+  },
+  {
+    fullName: 'Кладовщик Складской',
+    roleSlug: 'keeper',
+    bitrixUserId: 'dev:keeper-sklad',
+    roleLabel: 'кладовщик — База Север и Ремонт',
+  },
+];
 
 const auth = useAuthStore();
 const router = useRouter();
 const fullName = ref('');
 const error = ref('');
 const loading = ref(false);
+const devEnabled = ref(false);
+const statusLoaded = ref(false);
 
-async function submit() {
+onMounted(async () => {
+  try {
+    const status = await api('/auth/dev-status');
+    devEnabled.value = Boolean(status?.enabled);
+  } catch {
+    devEnabled.value = false;
+  } finally {
+    statusLoaded.value = true;
+  }
+});
+
+async function enter(payload) {
   loading.value = true;
   error.value = '';
   try {
-    await auth.devLogin(fullName.value);
+    await auth.devLogin(payload);
     router.push('/mine');
   } catch (e) {
     error.value =
@@ -48,5 +115,17 @@ async function submit() {
   } finally {
     loading.value = false;
   }
+}
+
+function loginAs(preset) {
+  return enter({
+    fullName: preset.fullName,
+    roleSlug: preset.roleSlug,
+    bitrixUserId: preset.bitrixUserId,
+  });
+}
+
+function submit() {
+  return enter({ fullName: fullName.value.trim() });
 }
 </script>

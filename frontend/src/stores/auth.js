@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { api, getToken, setToken } from '../api/client';
+import { api, clearLegacyToken } from '../api/client';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -13,12 +13,27 @@ export const useAuthStore = defineStore('auth', {
     can: (s) => (perm) => (s.user?.role?.permissions || []).includes(perm),
   },
   actions: {
-    consumeTokenFromHash() {
-      const hash = window.location.hash || '';
-      const match = hash.match(/token=([^&]+)/);
-      if (match) {
-        setToken(decodeURIComponent(match[1]));
-        history.replaceState(null, '', window.location.pathname + window.location.search);
+    async consumeAuthCodeFromQuery() {
+      clearLegacyToken();
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (!code) return;
+      params.delete('code');
+      const qs = params.toString();
+      history.replaceState(
+        null,
+        '',
+        window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash,
+      );
+      try {
+        const data = await api('/auth/exchange', {
+          method: 'POST',
+          body: { code },
+        });
+        this.user = data.user;
+        this.error = '';
+      } catch (e) {
+        this.error = e.message || 'Не удалось войти';
       }
     },
     async fetchMe() {
@@ -29,19 +44,25 @@ export const useAuthStore = defineStore('auth', {
         return this.user;
       } catch {
         this.user = null;
-        setToken(null);
         return null;
       } finally {
         this.loading = false;
       }
     },
-    async devLogin(fullName) {
+    async devLogin(payload) {
       this.error = '';
+      const body =
+        typeof payload === 'string'
+          ? { fullName: payload }
+          : {
+              fullName: payload.fullName,
+              roleSlug: payload.roleSlug,
+              bitrixUserId: payload.bitrixUserId,
+            };
       const data = await api('/auth/dev-login', {
         method: 'POST',
-        body: { fullName },
+        body,
       });
-      setToken(data.token);
       this.user = data.user;
       return data.user;
     },
@@ -51,7 +72,7 @@ export const useAuthStore = defineStore('auth', {
       } catch {
         // cookie may already be gone
       }
-      setToken(null);
+      clearLegacyToken();
       this.user = null;
     },
   },

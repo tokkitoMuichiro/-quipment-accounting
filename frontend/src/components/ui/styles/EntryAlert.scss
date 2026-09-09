@@ -1,0 +1,48 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.entry-alert {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: $z-modal;
+  width: min(360px, calc(100vw - 32px));
+  background: $color-paper;
+  border: 1px solid $color-line;
+  box-shadow: $shadow-modal;
+  padding: 14px 16px;
+}
+
+.entry-alert__title {
+  display: block;
+  font-size: $font-size-md;
+  color: $color-ink;
+  margin-bottom: 8px;
+}
+
+.entry-alert__list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: $color-muted;
+  font-size: $font-size-sm;
+  line-height: 1.45;
+}
+
+.entry-alert__list strong {
+  color: $color-ink;
+}
+
+.entry-alert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@include mobile {
+  .entry-alert {
+    top: calc(#{$header-height} + 10px + env(safe-area-inset-top, 0px));
+    right: max(12px, env(safe-area-inset-right));
+    left: max(12px, env(safe-area-inset-left));
+    width: auto;
+  }
+}

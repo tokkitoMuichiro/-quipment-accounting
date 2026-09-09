@@ -1,5 +1,5 @@
 function isPrivileged(auth) {
-  return Boolean(auth?.can?.('edit') || auth?.can?.('manage_roles'));
+  return Boolean(auth?.can?.('edit_all') || auth?.can?.('manage_roles'));
 }
 
 function ownsItem(auth, item) {
@@ -20,6 +20,7 @@ function canActOnItem(auth, item) {
 export function canTransferItem(auth, item) {
   if (!item || !auth?.user || !auth.can('transfer')) return false;
   if (isPendingAccept(item)) return false;
+  if (isFillBlocked(item)) return false;
   return canActOnItem(auth, item);
 }
 
@@ -27,10 +28,48 @@ export function isPendingAccept(item) {
   return item?.pendingTransfer?.status === 'PENDING';
 }
 
+export function isFillNeedsFix(item) {
+  return item?.fillStatus === 'NEEDS_FIX';
+}
+
+export function isFillPendingReview(item) {
+  return item?.fillStatus === 'PENDING_REVIEW';
+}
+
+export function isFillBlocked(item) {
+  return isFillNeedsFix(item) || isFillPendingReview(item);
+}
+
+export function canEditItemCard(auth, item) {
+  if (!item || !auth?.user) return false;
+  if (isPrivileged(auth)) return true;
+  if (auth.can('edit') && ownsItem(auth, item)) return true;
+  if (!isFillBlocked(item)) return false;
+  return ownsItem(auth, item);
+}
+
+export function canFlagFill(auth, item) {
+  if (!item || !auth?.user || !auth.can('manage_roles')) return false;
+  if (isPendingAccept(item)) return false;
+  return true;
+}
+
+export function canConfirmFill(auth, item) {
+  if (!item || !auth?.user || !auth.can('manage_roles')) return false;
+  return isFillBlocked(item);
+}
+
 export function canAcceptTransfer(auth, item) {
   if (!item || !auth?.user || !isPendingAccept(item)) return false;
   if (isPrivileged(auth)) return true;
-  return item.pendingTransfer.toUserId === auth.user.id;
+  const pending = item.pendingTransfer;
+  if (pending.toOwnerType === 'USER') {
+    return pending.toUserId === auth.user.id;
+  }
+  if (pending.toOwnerType === 'WAREHOUSE' && pending.toWarehouseId) {
+    return (auth.user.warehouseIds || []).includes(pending.toWarehouseId);
+  }
+  return false;
 }
 
 export function canCancelPendingTransfer(auth, item) {

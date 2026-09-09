@@ -54,6 +54,12 @@ export function repairSenderLabel(item) {
   return item?.sentToRepairBy?.fullName || '';
 }
 
+export const FILL_STATUS_LABEL = {
+  OK: '',
+  NEEDS_FIX: 'Неверно заполнено',
+  PENDING_REVIEW: 'Ожидает проверки',
+};
+
 export function typeLabel(item) {
   return item.type === 'SERIAL' ? 'Серийное' : 'Неномерное';
 }
