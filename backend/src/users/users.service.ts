@@ -24,6 +24,7 @@ export class UsersService {
         id: true,
         fullName: true,
         role: { select: { id: true, name: true, slug: true } },
+        _count: { select: { equipment: true } },
       },
     });
   }
