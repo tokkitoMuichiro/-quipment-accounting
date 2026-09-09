@@ -40,6 +40,7 @@ export class RolesController {
   constructor(private readonly roles: RolesService) {}
 
   @Get('catalog')
+  @RequirePermissions('manage_roles')
   catalog() {
     return ALL_PERMISSIONS.map((key) => ({
       key,
@@ -48,6 +49,7 @@ export class RolesController {
   }
 
   @Get()
+  @RequirePermissions('manage_roles')
   list() {
     return this.roles.list();
   }

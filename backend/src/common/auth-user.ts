@@ -24,10 +24,20 @@ export function isAdmin(user: AuthUser): boolean {
   return hasPermission(rolePermissions(user), 'manage_roles');
 }
 
-/** Администратор или роль с полным редактированием карточек. */
+/** Админ или роль с edit_all — обход ограничений «только своё». */
 export function isPrivilegedStaff(user: AuthUser): boolean {
   const perms = rolePermissions(user);
-  return hasPermission(perms, 'manage_roles') || hasPermission(perms, 'edit');
+  return (
+    hasPermission(perms, 'manage_roles') || hasPermission(perms, 'edit_all')
+  );
+}
+
+/** Полное редактирование любой карточки. */
+export function canEditAllItems(user: AuthUser): boolean {
+  const perms = rolePermissions(user);
+  return (
+    hasPermission(perms, 'edit_all') || hasPermission(perms, 'manage_roles')
+  );
 }
 
 export function canEditDocuments(

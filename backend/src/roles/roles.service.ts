@@ -61,6 +61,15 @@ export class RolesService {
         'Нельзя убрать право настройки ролей у администратора',
       );
     }
+    if (
+      role.slug === 'admin' &&
+      permissions &&
+      !permissions.includes('edit_all')
+    ) {
+      throw new BadRequestException(
+        'Нельзя убрать право полного редактирования у администратора',
+      );
+    }
 
     return this.prisma.role.update({
       where: { id },

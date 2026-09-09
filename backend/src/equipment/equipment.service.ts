@@ -18,6 +18,8 @@ import {
   canDeleteItem,
   canEditDocuments,
   canTransferFrom,
+  isAdmin,
+  canEditAllItems,
   isPrivilegedStaff,
   isWarehouseKeeper,
   keeperWarehouseIds,
@@ -28,9 +30,11 @@ import {
   REPAIR_WAREHOUSE_NAME,
   REPAIR_WAREHOUSE_SLUG,
 } from '../warehouses/repair-warehouse';
+import { NotifyService } from '../bitrix/notify.service';
 import {
   BulkTransferDto,
   CreateEquipmentDto,
+  FlagFillDto,
   TransferEquipmentDto,
   UpdateEquipmentDto,
 } from './equipment.dto';
@@ -51,13 +55,39 @@ const includeOwner = {
   },
 } satisfies Prisma.EquipmentInclude;
 
+type EquipmentWithOwner = Prisma.EquipmentGetPayload<{
+  include: typeof includeOwner;
+}>;
+
 @Injectable()
 export class EquipmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly excel: ExcelService,
+    private readonly notify: NotifyService,
   ) {}
 
+  private canSeeFillComment(user: AuthUser, item: { ownerUserId?: string | null }) {
+    return isAdmin(user) || item.ownerUserId === user.id;
+  }
+
+  private sanitizeItem(item: EquipmentWithOwner, user: AuthUser) {
+    if (this.canSeeFillComment(user, item)) {
+      return item;
+    }
+    return { ...item, fillComment: null };
+  }
+
+  private assertFillAllowsTransfer(item: { fillStatus?: string | null }) {
+    if (
+      item.fillStatus === 'NEEDS_FIX' ||
+      item.fillStatus === 'PENDING_REVIEW'
+    ) {
+      throw new BadRequestException(
+        'Позиция на проверке заполнения. Сначала исправьте карточку и дождитесь подтверждения администратора',
+      );
+    }
+  }
   private canViewAll(user: AuthUser) {
     return hasPermission(rolePermissions(user), 'view_all');
   }
@@ -153,6 +183,16 @@ export class EquipmentService {
             is: { status: 'PENDING', toUserId: user.id },
           },
         },
+        warehouseIds.length
+          ? {
+              pendingTransfer: {
+                is: {
+                  status: 'PENDING',
+                  toWarehouseId: { in: warehouseIds },
+                },
+              },
+            }
+          : undefined,
       ].filter(Boolean) as Prisma.EquipmentWhereInput[],
     };
   }
@@ -174,8 +214,14 @@ export class EquipmentService {
         },
       ];
     } else if (warehouseId) {
-      where.ownerType = 'WAREHOUSE';
-      where.ownerWarehouseId = warehouseId;
+      where.OR = [
+        { ownerType: 'WAREHOUSE', ownerWarehouseId: warehouseId },
+        {
+          pendingTransfer: {
+            is: { status: 'PENDING', toWarehouseId: warehouseId },
+          },
+        },
+      ];
     } else if (scope === 'mine') {
       where.OR = [
         { ownerType: 'USER', ownerUserId: user.id },
@@ -188,14 +234,82 @@ export class EquipmentService {
     } else {
       Object.assign(where, this.visibleWhere(user));
     }
-    return this.prisma.equipment.findMany({
-      where,
-      include: includeOwner,
-      orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }],
+    return this.prisma.equipment
+      .findMany({
+        where,
+        include: includeOwner,
+        orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }],
+      })
+      .then((items) =>
+        this.sortByFillPriority(items).map((item) =>
+          this.sanitizeItem(item, user),
+        ),
+      );
+  }
+
+  private sortByFillPriority<T extends { fillStatus?: string | null; name: string; factoryNumber?: string | null }>(
+    items: T[],
+  ): T[] {
+    const rank = (status?: string | null) => {
+      if (status === 'NEEDS_FIX') return 0;
+      if (status === 'PENDING_REVIEW') return 1;
+      return 2;
+    };
+    return [...items].sort((a, b) => {
+      const byFill = rank(a.fillStatus) - rank(b.fillStatus);
+      if (byFill !== 0) return byFill;
+      const byName = a.name.localeCompare(b.name, 'ru');
+      if (byName !== 0) return byName;
+      return (a.factoryNumber || '').localeCompare(b.factoryNumber || '', 'ru');
     });
   }
 
-  async get(id: string, _user: AuthUser) {
+  async alerts(user: AuthUser) {
+    const warehouseIds = keeperWarehouseIds(user);
+    const pendingWhere: Prisma.EquipmentWhereInput = {
+      OR: [
+        {
+          pendingTransfer: {
+            is: { status: 'PENDING', toUserId: user.id },
+          },
+        },
+        warehouseIds.length
+          ? {
+              pendingTransfer: {
+                is: {
+                  status: 'PENDING',
+                  toWarehouseId: { in: warehouseIds },
+                },
+              },
+            }
+          : undefined,
+      ].filter(Boolean) as Prisma.EquipmentWhereInput[],
+    };
+
+    const [pendingAccept, needsFix, pendingReview] = await Promise.all([
+      this.prisma.equipment.count({ where: pendingWhere }),
+      this.prisma.equipment.count({
+        where: {
+          fillStatus: 'NEEDS_FIX',
+          ownerType: 'USER',
+          ownerUserId: user.id,
+        },
+      }),
+      isAdmin(user)
+        ? this.prisma.equipment.count({
+            where: { fillStatus: 'PENDING_REVIEW' },
+          })
+        : Promise.resolve(0),
+    ]);
+
+    return {
+      pendingAccept,
+      needsFix,
+      pendingReview,
+    };
+  }
+
+  async get(id: string, user: AuthUser) {
     const item = await this.prisma.equipment.findUnique({
       where: { id },
       include: includeOwner,
@@ -203,7 +317,7 @@ export class EquipmentService {
     if (!item) {
       throw new NotFoundException('Оборудование не найдено');
     }
-    return item;
+    return this.sanitizeItem(item, user);
   }
 
   private normalizeCreate(dto: CreateEquipmentDto) {
@@ -297,17 +411,25 @@ export class EquipmentService {
   async update(id: string, dto: UpdateEquipmentDto, user: AuthUser) {
     const item = await this.get(id, user);
     const perms = rolePermissions(user);
-    const canFullEdit = hasPermission(perms, 'edit');
+    const canFullEdit = canEditAllItems(user);
+    const canEditOwn =
+      hasPermission(perms, 'edit') && canActOnItem(user, item);
     const canEditCondition = hasPermission(perms, 'edit_condition');
+    const fillOpen =
+      item.fillStatus === 'NEEDS_FIX' || item.fillStatus === 'PENDING_REVIEW';
+    const canOwnerFixCard =
+      !canFullEdit && !canEditOwn && fillOpen && canActOnItem(user, item);
+    const canEditCard = canFullEdit || canEditOwn || canOwnerFixCard;
     const wantsCard =
       dto.name !== undefined ||
+      dto.type !== undefined ||
       dto.factoryNumber !== undefined ||
       dto.quantity !== undefined;
     const wantsCondition =
       dto.condition !== undefined || dto.conditionNote !== undefined;
     const wantsDocs = dto.hasDocuments !== undefined;
 
-    if (wantsCard && !canFullEdit) {
+    if (wantsCard && !canEditCard) {
       throw new ForbiddenException('Нет права редактировать карточку');
     }
     if (wantsCondition) {
@@ -320,7 +442,7 @@ export class EquipmentService {
         );
       }
     }
-    if (wantsDocs && !canEditDocuments(user, item)) {
+    if (wantsDocs && !canEditDocuments(user, item) && !canOwnerFixCard) {
       throw new ForbiddenException(
         'Паспорта и сертификаты можно отмечать только у своего оборудования или на своей базе',
       );
@@ -329,11 +451,28 @@ export class EquipmentService {
       return item;
     }
 
-    if (item.type === 'SERIAL' && dto.quantity && dto.quantity !== 1) {
-      throw new BadRequestException('Серийная единица всегда 1 шт.');
+    const nextType = dto.type ?? item.type;
+    if (dto.type !== undefined && dto.type !== item.type && !canEditCard) {
+      throw new ForbiddenException('Нет права менять тип оборудования');
     }
-    if (item.type === 'CONSUMABLE' && dto.factoryNumber) {
-      throw new BadRequestException('У неномерного оборудования нет заводского номера');
+    if (nextType === 'SERIAL') {
+      const factoryNumber =
+        dto.factoryNumber !== undefined
+          ? dto.factoryNumber.trim()
+          : item.factoryNumber || '';
+      if (!factoryNumber) {
+        throw new BadRequestException(
+          'Для серийного оборудования нужен заводской номер',
+        );
+      }
+      if (dto.quantity !== undefined && dto.quantity !== 1) {
+        throw new BadRequestException('Серийная единица всегда 1 шт.');
+      }
+    }
+    if (nextType === 'CONSUMABLE' && dto.factoryNumber?.trim()) {
+      throw new BadRequestException(
+        'У неномерного оборудования нет заводского номера',
+      );
     }
 
     const nextCondition = dto.condition ?? item.condition;
@@ -355,20 +494,48 @@ export class EquipmentService {
         'Сначала отмените передачу или дождитесь принятия',
       );
     }
+    if (item.pendingTransferId && dto.type !== undefined && dto.type !== item.type) {
+      throw new BadRequestException(
+        'Сначала отмените передачу или дождитесь принятия',
+      );
+    }
+
+    const markPendingReview = Boolean(
+      fillOpen &&
+        !canFullEdit &&
+        canActOnItem(user, item) &&
+        (wantsCard || wantsDocs),
+    );
 
     const resultId = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.equipment.update({
         where: { id },
         data: {
-          name: canFullEdit ? dto.name?.trim() : undefined,
-          factoryNumber:
-            !canFullEdit || dto.factoryNumber === undefined
-              ? undefined
-              : dto.factoryNumber.trim() || null,
-          quantity: canFullEdit ? dto.quantity : undefined,
+          name: canEditCard ? dto.name?.trim() : undefined,
+          type: canEditCard && dto.type !== undefined ? nextType : undefined,
+          factoryNumber: !canEditCard
+            ? undefined
+            : nextType === 'SERIAL'
+              ? (dto.factoryNumber !== undefined
+                  ? dto.factoryNumber.trim() || null
+                  : undefined)
+              : null,
+          quantity: !canEditCard
+            ? undefined
+            : nextType === 'SERIAL'
+              ? 1
+              : dto.quantity !== undefined
+                ? dto.quantity
+                : undefined,
           condition: wantsCondition ? nextCondition : undefined,
           conditionNote,
           hasDocuments: wantsDocs ? dto.hasDocuments : undefined,
+          ...(markPendingReview
+            ? {
+                fillStatus: 'PENDING_REVIEW' as const,
+                fillComment: null,
+              }
+            : {}),
         },
       });
 
@@ -392,10 +559,7 @@ export class EquipmentService {
     });
 
     this.excel.scheduleSync();
-    return this.prisma.equipment.findUnique({
-      where: { id: resultId },
-      include: includeOwner,
-    });
+    return this.get(resultId, user);
   }
 
   async remove(id: string, user: AuthUser) {
@@ -425,10 +589,27 @@ export class EquipmentService {
         this.offerPendingInTx(tx, id, dto, user),
       );
       this.excel.scheduleSync();
-      return this.prisma.equipment.findUnique({
-        where: { id: resultId },
-        include: includeOwner,
+      return this.get(resultId, user);
+    }
+
+    if (dto.toOwnerType === 'WAREHOUSE') {
+      if (!dto.toWarehouseId) {
+        throw new BadRequestException('Укажите производственную базу');
+      }
+      const dest = await this.prisma.warehouse.findUnique({
+        where: { id: dto.toWarehouseId },
       });
+      if (!dest) {
+        throw new BadRequestException('Производственная база не найдена');
+      }
+      // На «Ремонт» — сразу; на обычную базу — ждёт принятия кладовщиком.
+      if (dest.slug !== REPAIR_WAREHOUSE_SLUG) {
+        const resultId = await this.prisma.$transaction((tx) =>
+          this.offerPendingInTx(tx, id, dto, user),
+        );
+        this.excel.scheduleSync();
+        return this.get(resultId, user);
+      }
     }
 
     const resultId = await this.prisma.$transaction((tx) =>
@@ -436,10 +617,7 @@ export class EquipmentService {
     );
 
     this.excel.scheduleSync();
-    return this.prisma.equipment.findUnique({
-      where: { id: resultId },
-      include: includeOwner,
-    });
+    return this.get(resultId, user);
   }
 
   async acceptTransfer(id: string, user: AuthUser) {
@@ -448,8 +626,19 @@ export class EquipmentService {
     if (!pending || pending.status !== 'PENDING') {
       throw new BadRequestException('Нет передачи, ожидающей принятия');
     }
-    if (pending.toUserId !== user.id && !isPrivilegedStaff(user)) {
-      throw new ForbiddenException('Принять может только получатель');
+
+    const canAcceptUser =
+      pending.toOwnerType === 'USER' && pending.toUserId === user.id;
+    const canAcceptWarehouse =
+      pending.toOwnerType === 'WAREHOUSE' &&
+      Boolean(pending.toWarehouseId) &&
+      isWarehouseKeeper(user, pending.toWarehouseId!);
+    if (!canAcceptUser && !canAcceptWarehouse && !isPrivilegedStaff(user)) {
+      throw new ForbiddenException(
+        pending.toOwnerType === 'WAREHOUSE'
+          ? 'Принять может кладовщик этой базы'
+          : 'Принять может только получатель',
+      );
     }
 
     const resultId = await this.prisma.$transaction((tx) =>
@@ -468,10 +657,7 @@ export class EquipmentService {
     );
 
     this.excel.scheduleSync();
-    return this.prisma.equipment.findUnique({
-      where: { id: resultId },
-      include: includeOwner,
-    });
+    return this.get(resultId, user);
   }
 
   async cancelPendingTransfer(id: string, user: AuthUser) {
@@ -502,6 +688,63 @@ export class EquipmentService {
     return this.get(id, user);
   }
 
+  async flagFill(id: string, dto: FlagFillDto, user: AuthUser) {
+    if (!isAdmin(user)) {
+      throw new ForbiddenException('Помечать заполнение может только администратор');
+    }
+    const item = await this.get(id, user);
+    if (item.pendingTransferId) {
+      throw new BadRequestException(
+        'Сначала отмените передачу или дождитесь принятия',
+      );
+    }
+    const comment = dto.comment.trim();
+    if (comment.length < 3) {
+      throw new BadRequestException('Укажите комментарий к замечанию');
+    }
+
+    await this.prisma.equipment.update({
+      where: { id: item.id },
+      data: {
+        fillStatus: 'NEEDS_FIX',
+        fillComment: comment,
+        flaggedById: user.id,
+        flaggedAt: new Date(),
+      },
+    });
+
+    if (item.ownerType === 'USER' && item.ownerUserId) {
+      void this.notify.notifyFillRemark({
+        ownerUserId: item.ownerUserId,
+        equipmentName: item.name,
+      });
+    }
+
+    this.excel.scheduleSync();
+    return this.get(id, user);
+  }
+
+  async confirmFill(id: string, user: AuthUser) {
+    if (!isAdmin(user)) {
+      throw new ForbiddenException('Подтвердить заполнение может только администратор');
+    }
+    const item = await this.get(id, user);
+    if (item.fillStatus === 'OK') {
+      return item;
+    }
+    await this.prisma.equipment.update({
+      where: { id: item.id },
+      data: {
+        fillStatus: 'OK',
+        fillComment: null,
+        flaggedById: null,
+        flaggedAt: null,
+      },
+    });
+    this.excel.scheduleSync();
+    return this.get(id, user);
+  }
+
   private async offerPendingInTx(
     tx: Prisma.TransactionClient,
     id: string,
@@ -513,20 +756,47 @@ export class EquipmentService {
       throw new NotFoundException('Оборудование не найдено');
     }
     this.assertCanTransferFrom(user, item);
+    this.assertFillAllowsTransfer(item);
     if (item.pendingTransferId) {
       throw new BadRequestException(
         'Эта позиция уже ожидает принятия. Отмените передачу или дождитесь получателя',
       );
     }
-    if (!dto.toUserId) {
+
+    if (dto.toOwnerType === 'USER') {
+      if (!dto.toUserId) {
+        throw new BadRequestException('Укажите получателя');
+      }
+      const recipient = await tx.user.findUnique({ where: { id: dto.toUserId } });
+      if (!recipient) {
+        throw new BadRequestException('Получатель не найден');
+      }
+      if (item.ownerType === 'USER' && item.ownerUserId === dto.toUserId) {
+        throw new BadRequestException('Уже находится у этого владельца');
+      }
+    } else if (dto.toOwnerType === 'WAREHOUSE') {
+      if (!dto.toWarehouseId) {
+        throw new BadRequestException('Укажите производственную базу');
+      }
+      const dest = await tx.warehouse.findUnique({
+        where: { id: dto.toWarehouseId },
+      });
+      if (!dest) {
+        throw new BadRequestException('Производственная база не найдена');
+      }
+      if (dest.slug === REPAIR_WAREHOUSE_SLUG) {
+        throw new BadRequestException(
+          'На базу «Ремонт» передача выполняется сразу, без принятия',
+        );
+      }
+      if (
+        item.ownerType === 'WAREHOUSE' &&
+        item.ownerWarehouseId === dto.toWarehouseId
+      ) {
+        throw new BadRequestException('Уже находится у этого владельца');
+      }
+    } else {
       throw new BadRequestException('Укажите получателя');
-    }
-    const recipient = await tx.user.findUnique({ where: { id: dto.toUserId } });
-    if (!recipient) {
-      throw new BadRequestException('Получатель не найден');
-    }
-    if (item.ownerType === 'USER' && item.ownerUserId === dto.toUserId) {
-      throw new BadRequestException('Уже находится у этого владельца');
     }
 
     const qty =
@@ -547,9 +817,9 @@ export class EquipmentService {
     );
     const toLabel = await this.ownerLabelTx(
       tx,
-      'USER',
+      dto.toOwnerType,
       dto.toUserId,
-      null,
+      dto.toWarehouseId,
     );
 
     const pending = await tx.transfer.create({
@@ -563,9 +833,10 @@ export class EquipmentService {
         fromUserId: item.ownerUserId,
         fromWarehouseId: item.ownerWarehouseId,
         fromLabel,
-        toOwnerType: 'USER',
-        toUserId: dto.toUserId,
-        toWarehouseId: null,
+        toOwnerType: dto.toOwnerType,
+        toUserId: dto.toOwnerType === 'USER' ? dto.toUserId : null,
+        toWarehouseId:
+          dto.toOwnerType === 'WAREHOUSE' ? dto.toWarehouseId : null,
         toLabel,
         actorUserId: user.id,
       },
@@ -575,6 +846,24 @@ export class EquipmentService {
       where: { id: item.id },
       data: { pendingTransferId: pending.id },
     });
+
+    if (dto.toOwnerType === 'USER' && dto.toUserId) {
+      this.notify.scheduleIncomingTransfer({
+        recipientUserIds: [dto.toUserId],
+        actorName: user.fullName,
+        kind: 'user',
+      });
+    } else if (dto.toOwnerType === 'WAREHOUSE' && dto.toWarehouseId) {
+      const keepers = await tx.warehouseKeeper.findMany({
+        where: { warehouseId: dto.toWarehouseId },
+        select: { userId: true },
+      });
+      this.notify.scheduleIncomingTransfer({
+        recipientUserIds: keepers.map((k) => k.userId),
+        actorName: user.fullName,
+        kind: 'warehouse',
+      });
+    }
 
     return item.id;
   }
@@ -621,6 +910,7 @@ export class EquipmentService {
 
     if (!options?.systemRepairMove && !options?.applyExistingTransferId) {
       this.assertCanTransferFrom(user, item);
+      this.assertFillAllowsTransfer(item);
     }
 
     if (dto.toOwnerType === 'USER' && !dto.toUserId) {

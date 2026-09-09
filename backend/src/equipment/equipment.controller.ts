@@ -13,6 +13,7 @@ import { EquipmentService } from './equipment.service';
 import {
   BulkTransferDto,
   CreateEquipmentDto,
+  FlagFillDto,
   TransferEquipmentDto,
   UpdateEquipmentDto,
 } from './equipment.dto';
@@ -35,6 +36,11 @@ export class EquipmentController {
     @Query('ownerUserId') ownerUserId?: string,
   ) {
     return this.equipment.list(user, scope, warehouseId, ownerUserId);
+  }
+
+  @Get('alerts')
+  alerts(@CurrentUser() user: AuthUser) {
+    return this.equipment.alerts(user);
   }
 
   @Get(':id')
@@ -77,6 +83,20 @@ export class EquipmentController {
   @Post(':id/cancel-pending')
   cancelPending(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.equipment.cancelPendingTransfer(id, user);
+  }
+
+  @Post(':id/flag-fill')
+  flagFill(
+    @Param('id') id: string,
+    @Body() dto: FlagFillDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.equipment.flagFill(id, dto, user);
+  }
+
+  @Post(':id/confirm-fill')
+  confirmFill(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.equipment.confirmFill(id, user);
   }
 
   @Post(':id/transfer')

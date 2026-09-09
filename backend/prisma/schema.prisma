@@ -30,6 +30,12 @@ enum TransferStatus {
   CANCELLED
 }
 
+enum FillStatus {
+  OK
+  NEEDS_FIX
+  PENDING_REVIEW
+}
+
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -48,10 +54,12 @@ model User {
   email        String?
   roleId       String
   role         Role     @relation(fields: [roleId], references: [id])
+  notifyBitrix Boolean  @default(true)
   equipment    Equipment[] @relation("OwnerUser")
   keepers      WarehouseKeeper[]
   actedTransfers Transfer[] @relation("TransferActor")
   incomingTransfers Transfer[] @relation("TransferToUser")
+  flaggedEquipment Equipment[] @relation("FillFlaggedBy")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -93,11 +101,17 @@ model Equipment {
   ownerWarehouse   Warehouse?          @relation(fields: [ownerWarehouseId], references: [id])
   pendingTransferId String?            @unique
   pendingTransfer  Transfer?           @relation("PendingOffer", fields: [pendingTransferId], references: [id])
+  fillStatus       FillStatus          @default(OK)
+  fillComment      String?
+  flaggedById      String?
+  flaggedBy        User?               @relation("FillFlaggedBy", fields: [flaggedById], references: [id], onDelete: SetNull)
+  flaggedAt        DateTime?
   transfers        Transfer[]          @relation("TransferEquipment")
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
   @@index([factoryNumber])
+  @@index([fillStatus])
 }
 
 model Transfer {

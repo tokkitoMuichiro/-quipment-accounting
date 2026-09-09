@@ -1,6 +1,7 @@
 import {
   canActOnItem,
   canDeleteItem,
+  canEditAllItems,
   canEditDocuments,
   canTransferFrom,
   isAdmin,
@@ -60,14 +61,17 @@ const repairItem = {
 
 describe('auth-user access', () => {
   const admin = user({
-    perms: ['manage_roles', 'edit', 'delete', 'transfer', 'edit_condition'],
+    perms: ['manage_roles', 'edit_all', 'edit', 'delete', 'transfer', 'edit_condition'],
+  });
+  const editor = user({
+    perms: ['edit'],
   });
   const master = user({
-    perms: ['view_own', 'create', 'transfer', 'edit_condition'],
+    perms: ['view_own', 'create', 'edit', 'transfer', 'edit_condition'],
   });
   const keeper = user({
     id: 'keeper-1',
-    perms: ['view_own', 'create', 'transfer', 'edit_condition', 'manage_warehouses'],
+    perms: ['view_own', 'create', 'edit', 'transfer', 'edit_condition', 'manage_warehouses'],
     keeperIds: ['wh-1', 'repair'],
   });
   const otherKeeper = user({
@@ -76,10 +80,20 @@ describe('auth-user access', () => {
     keeperIds: ['other-wh'],
   });
 
-  it('treats manage_roles as admin', () => {
+  it('treats manage_roles as admin and privileged', () => {
     expect(isAdmin(admin)).toBe(true);
     expect(isAdmin(master)).toBe(false);
     expect(isPrivilegedStaff(admin)).toBe(true);
+    expect(canEditAllItems(admin)).toBe(true);
+    expect(isPrivilegedStaff(editor)).toBe(false);
+    expect(canEditAllItems(editor)).toBe(false);
+  });
+
+  it('lets edit_all act on any item', () => {
+    const fullEditor = user({ perms: ['edit_all', 'transfer', 'delete'] });
+    expect(isPrivilegedStaff(fullEditor)).toBe(true);
+    expect(canActOnItem(fullEditor, foreignItem)).toBe(true);
+    expect(canEditAllItems(fullEditor)).toBe(true);
   });
 
   it('lets a master act only on own equipment', () => {

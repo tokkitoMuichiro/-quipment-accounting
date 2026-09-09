@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
@@ -6,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
   ValidateIf,
@@ -35,6 +37,7 @@ export class CreateEquipmentDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   conditionNote?: string;
 
   @IsOptional()
@@ -60,6 +63,10 @@ export class UpdateEquipmentDto {
   name?: string;
 
   @IsOptional()
+  @IsEnum(EquipmentType)
+  type?: EquipmentType;
+
+  @IsOptional()
   @IsString()
   factoryNumber?: string;
 
@@ -74,6 +81,7 @@ export class UpdateEquipmentDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   conditionNote?: string;
 
   @IsOptional()
@@ -102,6 +110,7 @@ export class TransferEquipmentDto {
 export class BulkTransferDto {
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
   ids: string[];
 
@@ -115,4 +124,11 @@ export class BulkTransferDto {
   @ValidateIf((o) => o.toOwnerType === 'WAREHOUSE')
   @IsString()
   toWarehouseId?: string;
+}
+
+export class FlagFillDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(2000)
+  comment: string;
 }
