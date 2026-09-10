@@ -42,13 +42,14 @@
       <p v-else-if="statusLoaded" class="login__prod-hint">
         Откройте приложение из меню Битрикс24.
       </p>
+      <p v-if="authError" class="alert">{{ authError }}</p>
       <p v-if="error && !devEnabled" class="alert">{{ error }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import './styles/LoginView.scss';
 import { useRouter } from 'vue-router';
 import { api } from '../api/client';
@@ -89,6 +90,7 @@ const error = ref('');
 const loading = ref(false);
 const devEnabled = ref(false);
 const statusLoaded = ref(false);
+const authError = computed(() => auth.error || '');
 
 onMounted(async () => {
   try {

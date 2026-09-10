@@ -28,10 +28,12 @@ export class AuthService {
 
   private cookieOptions() {
     const frontend = this.config.get<string>('FRONTEND_URL') || '';
+    const secure = frontend.startsWith('https');
+    // Bitrix открывает приложение в iframe с другого сайта — для https нужен SameSite=None.
     return {
       httpOnly: true,
-      sameSite: 'lax' as const,
-      secure: frontend.startsWith('https'),
+      sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
+      secure,
       path: '/',
     };
   }
