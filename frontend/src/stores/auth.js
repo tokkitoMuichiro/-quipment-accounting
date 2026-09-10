@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { api, clearLegacyToken } from '../api/client';
+import { api, clearLegacyToken, setToken } from '../api/client';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -30,9 +30,13 @@ export const useAuthStore = defineStore('auth', {
           method: 'POST',
           body: { code },
         });
+        if (data.token) {
+          setToken(data.token);
+        }
         this.user = data.user;
         this.error = '';
       } catch (e) {
+        setToken(null);
         this.error = e.message || 'Не удалось войти';
       }
     },
@@ -44,6 +48,7 @@ export const useAuthStore = defineStore('auth', {
         return this.user;
       } catch {
         this.user = null;
+        setToken(null);
         return null;
       } finally {
         this.loading = false;
@@ -63,6 +68,9 @@ export const useAuthStore = defineStore('auth', {
         method: 'POST',
         body,
       });
+      if (data.token) {
+        setToken(data.token);
+      }
       this.user = data.user;
       return data.user;
     },
@@ -72,6 +80,7 @@ export const useAuthStore = defineStore('auth', {
       } catch {
         // cookie may already be gone
       }
+      setToken(null);
       clearLegacyToken();
       this.user = null;
     },

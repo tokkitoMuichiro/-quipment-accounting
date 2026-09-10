@@ -16,6 +16,16 @@ function corsOrigins(): string[] {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+  // Битрикс иногда бьёт в /api/bitrix//open — схлопываем лишние слэши в path.
+  app.use((req, _res, next) => {
+    if (typeof req.url === 'string' && req.url.includes('//')) {
+      const q = req.url.indexOf('?');
+      const path = q === -1 ? req.url : req.url.slice(0, q);
+      const search = q === -1 ? '' : req.url.slice(q);
+      req.url = path.replace(/\/{2,}/g, '/') + search;
+    }
+    next();
+  });
   app.use(
     helmet({
       contentSecurityPolicy: false,
