@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { api, clearLegacyToken, setToken } from '../api/client';
+import { api, setToken } from '../api/client';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -13,31 +13,16 @@ export const useAuthStore = defineStore('auth', {
     can: (s) => (perm) => (s.user?.role?.permissions || []).includes(perm),
   },
   actions: {
-    async consumeAuthCodeFromQuery() {
-      clearLegacyToken();
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      if (!code) return;
-      params.delete('code');
-      const qs = params.toString();
-      history.replaceState(
-        null,
-        '',
-        window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash,
-      );
-      try {
-        const data = await api('/auth/exchange', {
-          method: 'POST',
-          body: { code },
-        });
-        if (data.token) {
-          setToken(data.token);
-        }
-        this.user = data.user;
-        this.error = '';
-      } catch (e) {
-        setToken(null);
-        this.error = e.message || 'Не удалось войти';
+    consumeTokenFromHash() {
+      const hash = window.location.hash || '';
+      const match = hash.match(/token=([^&]+)/);
+      if (match) {
+        setToken(decodeURIComponent(match[1]));
+        history.replaceState(
+          null,
+          '',
+          window.location.pathname + window.location.search,
+        );
       }
     },
     async fetchMe() {
@@ -68,9 +53,7 @@ export const useAuthStore = defineStore('auth', {
         method: 'POST',
         body,
       });
-      if (data.token) {
-        setToken(data.token);
-      }
+      setToken(data.token);
       this.user = data.user;
       return data.user;
     },
@@ -81,7 +64,6 @@ export const useAuthStore = defineStore('auth', {
         // cookie may already be gone
       }
       setToken(null);
-      clearLegacyToken();
       this.user = null;
     },
   },

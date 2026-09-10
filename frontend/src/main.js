@@ -11,6 +11,6 @@ app.use(pinia);
 app.use(router);
 
 const auth = useAuthStore();
-auth.consumeAuthCodeFromQuery().finally(() => {
-  app.mount('#app');
-});
+auth.consumeTokenFromHash();
+
+app.mount('#app');

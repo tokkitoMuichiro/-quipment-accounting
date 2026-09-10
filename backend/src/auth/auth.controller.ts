@@ -27,7 +27,6 @@ class DevLoginDto {
   @IsString()
   email?: string;
 
-  /** admin | master | keeper — только при DEV_AUTH */
   @IsOptional()
   @IsString()
   roleSlug?: string;
@@ -40,12 +39,6 @@ class DevLoginDto {
 class NotifySettingsDto {
   @IsBoolean()
   notifyBitrix: boolean;
-}
-
-class ExchangeDto {
-  @IsString()
-  @MinLength(16)
-  code: string;
 }
 
 @Controller('auth')
@@ -75,22 +68,6 @@ export class AuthController {
     @Body() dto: NotifySettingsDto,
   ) {
     return this.auth.updateNotifyBitrix(user.id, dto.notifyBitrix);
-  }
-
-  @Post('exchange')
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
-  async exchange(
-    @Body() dto: ExchangeDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const userId = this.auth.consumeExchangeCode(dto.code);
-    const user = await this.auth.loadUser(userId);
-    if (!user) {
-      throw new ForbiddenException('Пользователь не найден');
-    }
-    const token = this.auth.signToken(user.id);
-    this.auth.setAuthCookie(res, token);
-    return { token, user: this.auth.serialize(user) };
   }
 
   @Post('dev-login')
