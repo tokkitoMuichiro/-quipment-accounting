@@ -100,9 +100,11 @@ export class BitrixController {
 
     const token = this.auth.signToken(user.id);
     this.auth.setAuthCookie(res, token);
-    const code = this.auth.createExchangeCode(user.id);
-    const frontend = this.config.get<string>('FRONTEND_URL') || '/';
-    const url = `${frontend.replace(/\/$/, '')}/?code=${encodeURIComponent(code)}`;
+    const frontend = (this.config.get<string>('FRONTEND_URL') || '/').replace(
+      /\/+$/,
+      '',
+    );
+    const url = `${frontend}/#token=${encodeURIComponent(token)}`;
     res.redirect(302, url);
   }
 

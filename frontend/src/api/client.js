@@ -1,32 +1,14 @@
 const TOKEN_KEY = 'equipment_token';
-const LEGACY_TOKEN_KEY = 'equipment_token'; // was in localStorage
 
 export function getToken() {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token) {
-  try {
-    if (token) {
-      sessionStorage.setItem(TOKEN_KEY, token);
-    } else {
-      sessionStorage.removeItem(TOKEN_KEY);
-    }
-  } catch {
-    // private mode / blocked storage
-  }
-}
-
-/** Убрать старый токен из localStorage (больше не используем). */
-export function clearLegacyToken() {
-  try {
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-  } catch {
-    // ignore
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
   }
 }
 
@@ -72,17 +54,11 @@ export async function api(path, options = {}) {
   }
 
   if (res.status === 401) {
-    const isAuthBootstrap =
-      path.startsWith('/auth/exchange') ||
-      path.startsWith('/auth/dev-status') ||
-      path.startsWith('/auth/dev-login');
-    if (!isAuthBootstrap) {
-      setToken(null);
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
-      }
+    setToken(null);
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
     }
-    throw new Error(await parseError(res));
+    throw new Error('Нужна авторизация');
   }
 
   if (!res.ok) {

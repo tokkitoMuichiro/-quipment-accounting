@@ -1,21 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { randomBytes } from 'crypto';
 import { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth-user';
 
 const COOKIE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-const EXCHANGE_TTL_MS = 2 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
-  private readonly exchangeCodes = new Map<
-    string,
-    { userId: string; expiresAt: number }
-  >();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -28,12 +21,10 @@ export class AuthService {
 
   private cookieOptions() {
     const frontend = this.config.get<string>('FRONTEND_URL') || '';
-    const secure = frontend.startsWith('https');
-    // Bitrix открывает приложение в iframe с другого сайта — для https нужен SameSite=None.
     return {
       httpOnly: true,
-      sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
-      secure,
+      sameSite: 'lax' as const,
+      secure: frontend.startsWith('https'),
       path: '/',
     };
   }
@@ -47,35 +38,6 @@ export class AuthService {
 
   clearAuthCookie(res: Response) {
     res.clearCookie('token', this.cookieOptions());
-  }
-
-  createExchangeCode(userId: string) {
-    this.pruneExchangeCodes();
-    const code = randomBytes(32).toString('base64url');
-    this.exchangeCodes.set(code, {
-      userId,
-      expiresAt: Date.now() + EXCHANGE_TTL_MS,
-    });
-    return code;
-  }
-
-  consumeExchangeCode(code: string): string {
-    this.pruneExchangeCodes();
-    const entry = this.exchangeCodes.get(code);
-    this.exchangeCodes.delete(code);
-    if (!entry || entry.expiresAt < Date.now()) {
-      throw new UnauthorizedException('Код входа недействителен или истёк');
-    }
-    return entry.userId;
-  }
-
-  private pruneExchangeCodes() {
-    const now = Date.now();
-    for (const [key, value] of this.exchangeCodes) {
-      if (value.expiresAt < now) {
-        this.exchangeCodes.delete(key);
-      }
-    }
   }
 
   async loadUser(userId: string): Promise<AuthUser | null> {
@@ -134,7 +96,7 @@ export class AuthService {
     });
   }
 
-  /** Локальный вход: фиксированный bitrixUserId и роль (не «первый = админ»). */
+  /** Локальный вход: фиксированный bitrixUserId и роль. */
   async upsertDevUser(params: {
     bitrixUserId: string;
     fullName: string;
@@ -145,7 +107,9 @@ export class AuthService {
       where: { slug: params.roleSlug },
     });
     if (!role) {
-      throw new Error(`Роль «${params.roleSlug}» не найдена. Выполните prisma db seed.`);
+      throw new Error(
+        `Роль «${params.roleSlug}» не найдена. Выполните prisma db seed.`,
+      );
     }
 
     const existing = await this.prisma.user.findUnique({
