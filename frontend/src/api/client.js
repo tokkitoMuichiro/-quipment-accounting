@@ -36,10 +36,14 @@ export async function api(path, options = {}) {
   }
 
   if (res.status === 401) {
-    if (!window.location.pathname.startsWith('/login')) {
+    const isAuthBootstrap =
+      path.startsWith('/auth/exchange') ||
+      path.startsWith('/auth/dev-status') ||
+      path.startsWith('/auth/dev-login');
+    if (!isAuthBootstrap && !window.location.pathname.startsWith('/login')) {
       window.location.href = '/login';
     }
-    throw new Error('Нужна авторизация');
+    throw new Error(await parseError(res));
   }
 
   if (!res.ok) {
