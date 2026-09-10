@@ -90,7 +90,7 @@ export class AuthController {
     }
     const token = this.auth.signToken(user.id);
     this.auth.setAuthCookie(res, token);
-    return { user: this.auth.serialize(user) };
+    return { token, user: this.auth.serialize(user) };
   }
 
   @Post('dev-login')
@@ -126,6 +126,7 @@ export class AuthController {
     const token = this.auth.signToken(user.id);
     this.auth.setAuthCookie(res, token);
     return {
+      token,
       user: this.auth.serialize(user),
     };
   }

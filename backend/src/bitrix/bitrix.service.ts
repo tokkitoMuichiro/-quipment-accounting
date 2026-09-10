@@ -228,11 +228,17 @@ export class BitrixService {
   }
 
   openHandlerUrl() {
-    const frontend = (this.config.get<string>('FRONTEND_URL') || '').replace(
-      /\/$/,
-      '',
-    );
+    const frontend = (this.config.get<string>('FRONTEND_URL') || '')
+      .trim()
+      .replace(/\/+$/, '');
     return `${frontend}/api/bitrix/open`;
+  }
+
+  installHandlerUrl() {
+    const frontend = (this.config.get<string>('FRONTEND_URL') || '')
+      .trim()
+      .replace(/\/+$/, '');
+    return `${frontend}/api/bitrix/install`;
   }
 
   async bindLeftMenu(domain: string, accessToken: string) {

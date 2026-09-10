@@ -1,23 +1,59 @@
+const TOKEN_KEY = 'equipment_token';
+const LEGACY_TOKEN_KEY = 'equipment_token'; // was in localStorage
+
+export function getToken() {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token) {
+  try {
+    if (token) {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } else {
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // private mode / blocked storage
+  }
+}
+
+/** Убрать старый токен из localStorage (больше не используем). */
+export function clearLegacyToken() {
+  try {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+const SERVER_DOWN =
+  'Сервер ещё не запущен. Дождитесь в терминале backend строки «Nest application successfully started» и войдите снова.';
+
+async function parseError(res) {
+  try {
+    const data = await res.json();
+    const msg = data.message;
+    return Array.isArray(msg) ? msg.join(', ') : msg || 'Ошибка запроса';
+  } catch {
+    if (res.status >= 500) {
+      return SERVER_DOWN;
+    }
+    return 'Ошибка запроса';
+  }
+}
+
 export async function api(path, options = {}) {
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
-
-  const SERVER_DOWN =
-    'Сервер ещё не запущен. Дождитесь в терминале backend строки «Nest application successfully started» и войдите снова.';
-
-  async function parseError(res) {
-    try {
-      const data = await res.json();
-      const msg = data.message;
-      return Array.isArray(msg) ? msg.join(', ') : msg || 'Ошибка запроса';
-    } catch {
-      if (res.status >= 500) {
-        return SERVER_DOWN;
-      }
-      return 'Ошибка запроса';
-    }
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   let res;
@@ -40,8 +76,11 @@ export async function api(path, options = {}) {
       path.startsWith('/auth/exchange') ||
       path.startsWith('/auth/dev-status') ||
       path.startsWith('/auth/dev-login');
-    if (!isAuthBootstrap && !window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
+    if (!isAuthBootstrap) {
+      setToken(null);
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
     throw new Error(await parseError(res));
   }
@@ -59,15 +98,4 @@ export async function api(path, options = {}) {
     return res.json();
   }
   return res.blob();
-}
-
-/** @deprecated legacy localStorage token — cleared on boot */
-const TOKEN_KEY = 'equipment_token';
-
-export function clearLegacyToken() {
-  try {
-    localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // ignore
-  }
 }
