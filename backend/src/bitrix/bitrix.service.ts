@@ -70,12 +70,9 @@ export class BitrixService {
 
     const memberId = auth.member_id || src.member_id || src.memberId || domain;
     const clientEndpoint = auth.client_endpoint || src.client_endpoint;
+    // Только application_token — APP_SID это другой идентификатор, его нельзя сравнивать.
     const applicationToken =
-      auth.application_token ||
-      src.application_token ||
-      src.APP_SID ||
-      src.app_sid ||
-      undefined;
+      auth.application_token || src.application_token || undefined;
 
     return {
       accessToken,
@@ -106,11 +103,9 @@ export class BitrixService {
   }
 
   /**
-   * Проверка application_token:
-   * 1) BITRIX_APPLICATION_TOKEN в .env — если задан;
-   * 2) иначе токен, сохранённый в BitrixPortal после первой установки;
-   * 3) иначе принимаем токен из запроса Битрикс (первичная привязка) и сохраняем его в savePortal.
-   * В интерфейсе портала поле часто не показывают — Битрикс всё равно шлёт его в auth.
+   * 1) BITRIX_APPLICATION_TOKEN в .env — строгое совпадение (если задан).
+   * 2) Иначе принимаем токен из Битрикс и при смене перезаписываем в БД.
+   * 3) Доп. защита на open — рабочий access_token (user.current).
    */
   private async assertApplicationToken(payload: BitrixAuthPayload) {
     const incoming = (payload.applicationToken || '').trim();
@@ -120,28 +115,34 @@ export class BitrixService {
 
     if (fromEnv) {
       if (!incoming || incoming !== fromEnv) {
-        throw new UnauthorizedException('Неверный application_token Битрикс24');
+        throw new UnauthorizedException(
+          'Неверный application_token Битрикс24 (очистите BITRIX_APPLICATION_TOKEN в .env, если задавали вручную)',
+        );
       }
       return;
     }
 
-    if (payload.memberId) {
-      const portal = await this.prisma.bitrixPortal.findUnique({
-        where: { memberId: payload.memberId },
-      });
-      const stored = portal?.applicationToken
-        ? this.open(portal.applicationToken).trim()
-        : '';
-      if (stored) {
-        if (!incoming || incoming !== stored) {
-          throw new UnauthorizedException('Неверный application_token Битрикс24');
-        }
-        return;
-      }
-    }
-
     if (incoming) {
-      // Первая установка / ещё не сохраняли токен — доверяем запросу с домена Битрикс.
+      if (payload.memberId) {
+        const portal = await this.prisma.bitrixPortal.findUnique({
+          where: { memberId: payload.memberId },
+        });
+        let stored = '';
+        try {
+          stored = portal?.applicationToken
+            ? this.open(portal.applicationToken).trim()
+            : '';
+        } catch {
+          this.logger.warn(
+            'Не удалось прочитать сохранённый application_token — перезапишем',
+          );
+        }
+        if (stored && stored !== incoming) {
+          this.logger.warn(
+            'application_token Битрикс изменился — обновляем сохранённый токен портала',
+          );
+        }
+      }
       return;
     }
 
@@ -152,8 +153,17 @@ export class BitrixService {
       return;
     }
 
+    if (payload.memberId) {
+      const portal = await this.prisma.bitrixPortal.findUnique({
+        where: { memberId: payload.memberId },
+      });
+      if (portal) {
+        return;
+      }
+    }
+
     throw new UnauthorizedException(
-      'Битрикс не передал application_token. Переустановите локальное приложение или задайте BITRIX_APPLICATION_TOKEN в .env',
+      'Битрикс не передал application_token. Откройте приложение из портала ещё раз или переустановите локальное приложение.',
     );
   }
 
