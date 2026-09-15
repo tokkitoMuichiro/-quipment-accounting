@@ -1,6 +1,6 @@
 ﻿services:
   api:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/tokkitomuichiro/-quipment-accounting}-api:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/tokkitomuichiro/equipment-accounting}-api:${IMAGE_TAG:-latest}
 
   frontend:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/tokkitomuichiro/-quipment-accounting}-frontend:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/tokkitomuichiro/equipment-accounting}-frontend:${IMAGE_TAG:-latest}
