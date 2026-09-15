@@ -7,11 +7,15 @@ jobs:
     steps:
       - name: SSH ping
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: DEPLOY_PATH
           script: |
             echo "SSH_OK"
             hostname
-            test -d "${{ secrets.DEPLOY_PATH || '/var/www/equipment' }}" && echo "DEPLOY_PATH_OK"
+            DEPLOY_PATH="${DEPLOY_PATH:-/var/www/equipment}"
+            test -d "$DEPLOY_PATH" && echo "DEPLOY_PATH_OK"
