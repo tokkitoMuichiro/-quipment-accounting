@@ -2,6 +2,7 @@
   <div>
     <EquipmentTable
       :items="items"
+      :category="category"
       :selectable="selectable"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -23,6 +24,7 @@
     />
     <EquipmentCards
       :items="items"
+      :category="category"
       :selectable="selectable"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -64,6 +66,7 @@ import { canEditDocumentsItem, canEditItemCard } from '../../utils/access';
 
 defineProps({
   items: { type: Array, default: () => [] },
+  category: { type: String, default: 'EQUIPMENT' },
   selectable: { type: Boolean, default: false },
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },

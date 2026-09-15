@@ -8,6 +8,7 @@ import { AuthUser } from '../common/auth-user';
 import { hasPermission } from '../common/permissions';
 import { CreateWarehouseDto, UpdateWarehouseDto } from './warehouses.dto';
 import { REPAIR_WAREHOUSE_NAME, REPAIR_WAREHOUSE_SLUG } from './repair-warehouse';
+import { parseAssetCategory } from '../equipment/asset-helpers';
 
 @Injectable()
 export class WarehousesService {
@@ -40,7 +41,8 @@ export class WarehousesService {
     });
   }
 
-  async get(id: string, user: AuthUser) {
+  async get(id: string, user: AuthUser, categoryRaw?: string) {
+    const category = parseAssetCategory(categoryRaw);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id },
       include: {
@@ -60,13 +62,14 @@ export class WarehousesService {
     } as const;
 
     const owned = await this.prisma.equipment.findMany({
-      where: { ownerType: 'WAREHOUSE', ownerWarehouseId: id },
+      where: { ownerType: 'WAREHOUSE', ownerWarehouseId: id, category },
       include: equipmentInclude,
       orderBy: { name: 'asc' },
     });
 
     const pendingInbound = await this.prisma.equipment.findMany({
       where: {
+        category,
         pendingTransfer: {
           is: { status: 'PENDING', toWarehouseId: id },
         },

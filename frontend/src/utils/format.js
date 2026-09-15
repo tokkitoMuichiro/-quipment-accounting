@@ -31,6 +31,28 @@ export const TRANSFER_STATUS_LABEL = {
   CANCELLED: 'Отменена',
 };
 
+export const VEHICLE_KIND_OPTIONS = [
+  { value: 'PASSENGER', label: 'Легковой' },
+  { value: 'TRUCK', label: 'Грузовой' },
+  { value: 'SPECIAL', label: 'Спецтехника' },
+  { value: 'MOTORCYCLE', label: 'Мотоцикл' },
+  { value: 'TRAILER', label: 'Прицеп' },
+];
+
+export const CARD_KIND_OPTIONS = [
+  { value: 'TRANSPONDER', label: 'Транспондер' },
+  { value: 'FUEL', label: 'Топливная карта' },
+  { value: 'BUSINESS', label: 'Бизнес-карта' },
+];
+
+export function vehicleKindLabel(kind) {
+  return VEHICLE_KIND_OPTIONS.find((o) => o.value === kind)?.label || kind || '';
+}
+
+export function cardKindLabel(kind) {
+  return CARD_KIND_OPTIONS.find((o) => o.value === kind)?.label || kind || '';
+}
+
 export function ownerLabel(item) {
   if (item.ownerType === 'USER') {
     return item.ownerUser?.fullName || 'Сотрудник';
@@ -61,9 +83,59 @@ export const FILL_STATUS_LABEL = {
 };
 
 export function typeLabel(item) {
+  if (item.category === 'VEHICLE') {
+    return vehicleKindLabel(item.vehicleKind) || 'Транспорт';
+  }
+  if (item.category === 'CARD') {
+    return cardKindLabel(item.cardKind) || 'Карта';
+  }
   return item.type === 'SERIAL' ? 'Серийное' : 'Неномерное';
+}
+
+export function identityLabel(item) {
+  if (item.category === 'VEHICLE') return item.plateNumber || '—';
+  if (item.category === 'CARD') {
+    if (item.cardKind === 'BUSINESS' && item.cardNumber) {
+      return `****${item.cardNumber}`;
+    }
+    return item.cardNumber || '—';
+  }
+  return item.factoryNumber || '—';
+}
+
+export function identityColumnTitle(category) {
+  if (category === 'VEHICLE') return 'Госномер';
+  if (category === 'CARD') return 'Номер';
+  return 'Заводской номер';
+}
+
+export function searchBlob(item) {
+  return [
+    item.name,
+    item.factoryNumber,
+    item.plateNumber,
+    item.cardNumber,
+    vehicleKindLabel(item.vehicleKind),
+    cardKindLabel(item.cardKind),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
 }
 
 export function formatDate(value) {
   return new Date(value).toLocaleString('ru-RU');
+}
+
+export function categoryFromRoute(metaCategory) {
+  const value = (metaCategory || 'equipment').toLowerCase();
+  if (value === 'vehicle' || value === 'vehicles') return 'VEHICLE';
+  if (value === 'card' || value === 'cards') return 'CARD';
+  return 'EQUIPMENT';
+}
+
+export function categoryQueryParam(category) {
+  if (category === 'VEHICLE') return 'vehicle';
+  if (category === 'CARD') return 'card';
+  return 'equipment';
 }

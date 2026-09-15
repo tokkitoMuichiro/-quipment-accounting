@@ -1,26 +1,75 @@
 <template>
   <AppModal :title="modalTitle" @close="$emit('close')">
     <form class="form-grid" @submit.prevent="submit">
-      <label>
-        Наименование
-        <input v-model="form.name" minlength="2" required />
-      </label>
-      <label>
-        Тип
-        <select v-model="form.type" :disabled="typeLocked">
-          <option value="SERIAL">Серийное (заводской номер)</option>
-          <option value="CONSUMABLE">Неномерное (количество)</option>
-        </select>
-      </label>
-      <label v-if="form.type === 'SERIAL'">
-        Заводской номер
-        <input v-model="form.factoryNumber" class="mono" required />
-      </label>
-      <label v-else>
-        Количество
-        <input v-model.number="form.quantity" type="number" min="1" required />
-      </label>
-      <template v-if="!item">
+      <template v-if="category === 'EQUIPMENT'">
+        <label>
+          Наименование
+          <input v-model="form.name" minlength="2" required />
+        </label>
+        <label>
+          Тип
+          <select v-model="form.type" :disabled="typeLocked">
+            <option value="SERIAL">Серийное (заводской номер)</option>
+            <option value="CONSUMABLE">Неномерное (количество)</option>
+          </select>
+        </label>
+        <label v-if="form.type === 'SERIAL'">
+          Заводской номер
+          <input v-model="form.factoryNumber" class="mono" required />
+        </label>
+        <label v-else>
+          Количество
+          <input v-model.number="form.quantity" type="number" min="1" required />
+        </label>
+      </template>
+
+      <template v-else-if="category === 'VEHICLE'">
+        <label>
+          Госномер
+          <input v-model="form.plateNumber" class="mono" required placeholder="A123BC77" />
+        </label>
+        <label>
+          Наименование
+          <input v-model="form.name" minlength="2" required />
+        </label>
+        <label>
+          Вид ТС
+          <select v-model="form.vehicleKind" required>
+            <option disabled value="">Выберите</option>
+            <option v-for="opt in VEHICLE_KIND_OPTIONS" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+      </template>
+
+      <template v-else>
+        <label>
+          Тип карты
+          <select v-model="form.cardKind" required :disabled="Boolean(item)">
+            <option disabled value="">Выберите</option>
+            <option v-for="opt in CARD_KIND_OPTIONS" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+        <label v-if="form.cardKind === 'TRANSPONDER'">
+          Наименование
+          <input v-model="form.name" minlength="2" required />
+        </label>
+        <label>
+          {{ form.cardKind === 'BUSINESS' ? 'Последние 4 цифры' : 'Номер' }}
+          <input
+            v-model="form.cardNumber"
+            class="mono"
+            required
+            :minlength="form.cardKind === 'BUSINESS' ? 4 : 1"
+            :maxlength="form.cardKind === 'BUSINESS' ? 4 : 64"
+          />
+        </label>
+      </template>
+
+      <template v-if="!item && category !== 'CARD'">
         <label>
           Состояние
           <ConditionSelect
@@ -30,7 +79,7 @@
           />
         </label>
         <p v-if="form.condition === 'IN_REPAIR'" class="muted">
-          Оборудование будет передано на базу «Ремонт».
+          Будет передано на базу «Ремонт».
         </p>
         <label v-if="needsNote">
           Пояснение
@@ -42,34 +91,36 @@
             placeholder="Что случилось, что сломалось, причина"
           />
         </label>
-        <label class="check-field">
+        <label v-if="category === 'EQUIPMENT'" class="check-field">
           <input v-model="form.hasDocuments" type="checkbox" class="checkbox" />
           Есть паспорта и сертификаты
         </label>
-        <template v-if="form.condition !== 'IN_REPAIR'">
-          <label>
-            Закрепить за
-            <select v-model="form.ownerType">
-              <option value="USER">Сотрудником</option>
-              <option v-if="assignableWarehouses.length" value="WAREHOUSE">Производственной базой</option>
-            </select>
-          </label>
-          <label v-if="form.ownerType === 'USER'">
-            Сотрудник
-            <select v-model="form.ownerUserId" required :disabled="!canAssignAnyone">
-              <option disabled value="">Выберите</option>
-              <option v-for="u in visibleUsers" :key="u.id" :value="u.id">{{ u.fullName }}</option>
-            </select>
-          </label>
-          <label v-else>
-            Производственная база
-            <select v-model="form.ownerWarehouseId" required>
-              <option disabled value="">Выберите</option>
-              <option v-for="w in assignableWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
-            </select>
-          </label>
-        </template>
       </template>
+
+      <template v-if="!item && (category === 'CARD' || form.condition !== 'IN_REPAIR')">
+        <label>
+          Закрепить за
+          <select v-model="form.ownerType">
+            <option value="USER">Сотрудником</option>
+            <option v-if="assignableWarehouses.length" value="WAREHOUSE">Производственной базой</option>
+          </select>
+        </label>
+        <label v-if="form.ownerType === 'USER'">
+          Сотрудник
+          <select v-model="form.ownerUserId" required :disabled="!canAssignAnyone">
+            <option disabled value="">Выберите</option>
+            <option v-for="u in visibleUsers" :key="u.id" :value="u.id">{{ u.fullName }}</option>
+          </select>
+        </label>
+        <label v-else>
+          Производственная база
+          <select v-model="form.ownerWarehouseId" required>
+            <option disabled value="">Выберите</option>
+            <option v-for="w in assignableWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+          </select>
+        </label>
+      </template>
+
       <p v-if="error" class="alert">{{ error }}</p>
       <div class="modal__actions">
         <button type="button" class="btn btn--ghost" @click="$emit('close')">Отмена</button>
@@ -87,10 +138,15 @@ import { canEditItemCard } from '../../utils/access';
 import { fetchUsers, fetchWarehouses } from '../../api/catalog';
 import { createEquipment, updateEquipment } from '../../api/equipment';
 import { useAuthStore } from '../../stores/auth';
-import { conditionNeedsNote } from '../../utils/format';
+import {
+  CARD_KIND_OPTIONS,
+  VEHICLE_KIND_OPTIONS,
+  conditionNeedsNote,
+} from '../../utils/format';
 
 const props = defineProps({
   item: { type: Object, default: null },
+  category: { type: String, default: 'EQUIPMENT' },
   defaultOwnerType: { type: String, default: 'USER' },
   defaultWarehouseId: { type: String, default: '' },
 });
@@ -103,11 +159,16 @@ const error = ref('');
 const canAssignAnyone = computed(
   () => auth.can('view_all') || auth.can('manage_warehouses') || auth.can('manage_roles'),
 );
+const category = computed(() => props.item?.category || props.category || 'EQUIPMENT');
 const modalTitle = computed(() => {
-  if (!props.item) return 'Новое оборудование';
+  if (!props.item) {
+    if (category.value === 'VEHICLE') return 'Новый транспорт';
+    if (category.value === 'CARD') return 'Новая карта';
+    return 'Новое оборудование';
+  }
   if (props.item.fillStatus === 'NEEDS_FIX') return 'Исправить карточку';
   if (props.item.fillStatus === 'PENDING_REVIEW') return 'Дополнить карточку';
-  return 'Изменить карточку';
+  return 'Изменить';
 });
 const typeLocked = computed(
   () => Boolean(props.item) && !canEditItemCard(auth, props.item),
@@ -128,6 +189,10 @@ const form = reactive({
   condition: 'OK',
   conditionNote: '',
   hasDocuments: false,
+  plateNumber: '',
+  vehicleKind: '',
+  cardKind: '',
+  cardNumber: '',
   ownerType: props.defaultOwnerType,
   ownerUserId: auth.user?.id || '',
   ownerWarehouseId: props.defaultWarehouseId,
@@ -146,6 +211,10 @@ watch(
     form.type = item.type;
     form.factoryNumber = item.factoryNumber || '';
     form.quantity = item.quantity;
+    form.plateNumber = item.plateNumber || '';
+    form.vehicleKind = item.vehicleKind || '';
+    form.cardKind = item.cardKind || '';
+    form.cardNumber = item.cardNumber || '';
   },
   { immediate: true },
 );
@@ -161,14 +230,53 @@ async function submit() {
   error.value = '';
   try {
     if (props.item) {
-      await updateEquipment(props.item.id, {
+      if (category.value === 'VEHICLE') {
+        await updateEquipment(props.item.id, {
+          name: form.name,
+          plateNumber: form.plateNumber,
+          vehicleKind: form.vehicleKind,
+        });
+      } else if (category.value === 'CARD') {
+        await updateEquipment(props.item.id, {
+          name: form.cardKind === 'TRANSPONDER' ? form.name : undefined,
+          cardKind: form.cardKind,
+          cardNumber: form.cardNumber,
+        });
+      } else {
+        await updateEquipment(props.item.id, {
+          name: form.name,
+          type: form.type,
+          factoryNumber: form.type === 'SERIAL' ? form.factoryNumber : '',
+          quantity: form.type === 'CONSUMABLE' ? form.quantity : 1,
+        });
+      }
+    } else if (category.value === 'VEHICLE') {
+      await createEquipment({
+        category: 'VEHICLE',
         name: form.name,
-        type: form.type,
-        factoryNumber: form.type === 'SERIAL' ? form.factoryNumber : '',
-        quantity: form.type === 'CONSUMABLE' ? form.quantity : 1,
+        plateNumber: form.plateNumber,
+        vehicleKind: form.vehicleKind,
+        condition: form.condition,
+        conditionNote: needsNote.value ? form.conditionNote.trim() : null,
+        ownerType: form.ownerType,
+        ownerUserId: form.ownerType === 'USER' ? form.ownerUserId : undefined,
+        ownerWarehouseId:
+          form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
+      });
+    } else if (category.value === 'CARD') {
+      await createEquipment({
+        category: 'CARD',
+        name: form.cardKind === 'TRANSPONDER' ? form.name : undefined,
+        cardKind: form.cardKind,
+        cardNumber: form.cardNumber,
+        ownerType: form.ownerType,
+        ownerUserId: form.ownerType === 'USER' ? form.ownerUserId : undefined,
+        ownerWarehouseId:
+          form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
     } else {
       await createEquipment({
+        category: 'EQUIPMENT',
         name: form.name,
         type: form.type,
         factoryNumber: form.type === 'SERIAL' ? form.factoryNumber : undefined,
@@ -178,7 +286,8 @@ async function submit() {
         hasDocuments: form.hasDocuments,
         ownerType: form.ownerType,
         ownerUserId: form.ownerType === 'USER' ? form.ownerUserId : undefined,
-        ownerWarehouseId: form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
+        ownerWarehouseId:
+          form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
     }
     emit('saved');

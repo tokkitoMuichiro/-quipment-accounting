@@ -1,44 +1,53 @@
 <template>
   <section>
-    <PageHeader
-      title="Оборудование у сотрудников"
-      subtitle="Сотрудники с закреплённым оборудованием — откройте карточку, чтобы увидеть список"
-    />
+    <PageHeader :title="pageTitle" :subtitle="pageSubtitle">
+      <template v-if="userId" #actions>
+        <button type="button" class="btn btn--ghost" @click="backToPeople">
+          К списку сотрудников
+        </button>
+      </template>
+    </PageHeader>
 
     <p v-if="error" class="alert">{{ error }}</p>
-    <p v-if="usersLoading" class="muted">Загрузка сотрудников…</p>
 
-    <div v-else-if="peopleWithEquipment.length" class="people-tiles">
-      <button
-        v-for="u in peopleWithEquipment"
-        :key="u.id"
-        type="button"
-        class="people-tile"
-        :class="{ 'people-tile--active': userId === u.id }"
-        @click="selectUser(u.id)"
-      >
-        <span class="people-tile__name">{{ u.fullName }}</span>
-        <span class="people-tile__meta">
-          <span v-if="u.role?.name" class="people-tile__role">{{ u.role.name }}</span>
-          <span class="people-tile__count">{{ equipmentCountLabel(u) }}</span>
-        </span>
-      </button>
-    </div>
-    <p v-else-if="!usersLoading" class="empty card">
-      Пока ни у кого нет закреплённого оборудования.
-    </p>
+    <template v-if="!userId">
+      <p v-if="usersLoading" class="muted">Загрузка сотрудников…</p>
+      <div v-else-if="peopleWithEquipment.length" class="card table-wrap">
+        <table class="eq-table people-table">
+          <thead>
+            <tr>
+              <th>Сотрудник</th>
+              <th>Роль</th>
+              <th>Позиций</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="u in peopleWithEquipment"
+              :key="u.id"
+              class="people-row"
+              @click="selectUser(u.id)"
+            >
+              <td data-label="Сотрудник"><strong>{{ u.fullName }}</strong></td>
+              <td data-label="Роль">{{ u.role?.name || '—' }}</td>
+              <td data-label="Позиций">{{ equipmentCountLabel(u) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else-if="!usersLoading" class="empty card">
+        Пока ни у кого нет закреплённых позиций в этом разделе.
+      </p>
+    </template>
 
-    <template v-if="userId">
+    <template v-else>
       <div class="filters people-filters">
         <div class="people-filters__who">
-          <span class="people-filters__label">Сейчас:</span>
+          <span class="people-filters__label">Сотрудник:</span>
           <strong>{{ selectedUserName }}</strong>
-          <button type="button" class="btn btn--small btn--ghost" @click="selectUser('')">
-            Сбросить
-          </button>
         </div>
         <input v-model="query" placeholder="Поиск по названию или номеру" />
-        <select v-model="condition" aria-label="Состояние">
+        <select v-if="category !== 'CARD'" v-model="condition" aria-label="Состояние">
           <option value="">Все состояния</option>
           <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
             {{ opt.label }}
@@ -50,6 +59,7 @@
       <EquipmentBoard
         v-if="!loading"
         :items="filtered"
+        :category="category"
         :selectable="canSelect"
         :is-selected="isSelected"
         :all-selected="allSelected"
@@ -75,6 +85,7 @@
     <EquipmentForm
       v-if="editItem"
       :item="editItem"
+      :category="category"
       @close="editItem = null"
       @saved="onSaved"
     />
@@ -96,7 +107,12 @@ import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
 import { useSelection } from '../composables/useSelection';
 import { canTransferItem } from '../utils/access';
-import { CONDITION_OPTIONS } from '../utils/format';
+import {
+  CONDITION_OPTIONS,
+  categoryFromRoute,
+  categoryQueryParam,
+  searchBlob,
+} from '../utils/format';
 import PageHeader from '../components/ui/PageHeader.vue';
 import SelectionBar from '../components/ui/SelectionBar.vue';
 import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
@@ -116,6 +132,25 @@ const usersLoading = ref(false);
 const userId = ref(route.query.userId || '');
 const editItem = ref(null);
 const transferItems = ref([]);
+const category = computed(() => categoryFromRoute(route.meta.category));
+
+const pageTitle = computed(() => {
+  if (userId.value) {
+    if (category.value === 'VEHICLE') return 'Транспорт сотрудника';
+    if (category.value === 'CARD') return 'Карты сотрудника';
+    return 'Оборудование сотрудника';
+  }
+  return route.meta.title || 'У сотрудников';
+});
+
+const pageSubtitle = computed(() => {
+  if (userId.value) {
+    return selectedUserName.value;
+  }
+  if (category.value === 'VEHICLE') return 'Сотрудники с закреплённым транспортом';
+  if (category.value === 'CARD') return 'Сотрудники с закреплёнными картами';
+  return 'Сотрудники с закреплённым оборудованием — откройте строку, чтобы увидеть список';
+});
 
 const peopleWithEquipment = computed(() =>
   users.value
@@ -130,9 +165,9 @@ const selectedUserName = computed(
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
   return items.value.filter((item) => {
-    const text = `${item.name} ${item.factoryNumber || ''}`.toLowerCase();
-    const okQuery = !q || text.includes(q);
-    const okCond = !condition.value || item.condition === condition.value;
+    const okQuery = !q || searchBlob(item).includes(q);
+    const okCond =
+      category.value === 'CARD' || !condition.value || item.condition === condition.value;
     return okQuery && okCond;
   });
 });
@@ -169,10 +204,14 @@ function selectUser(id) {
   userId.value = id;
 }
 
+function backToPeople() {
+  selectUser('');
+}
+
 async function loadUsers() {
   usersLoading.value = true;
   try {
-    users.value = await fetchUsers();
+    users.value = await fetchUsers(categoryQueryParam(category.value));
   } finally {
     usersLoading.value = false;
   }
@@ -187,9 +226,11 @@ async function load() {
   error.value = '';
   loading.value = true;
   try {
-    items.value = await fetchEquipment(
-      `?ownerUserId=${encodeURIComponent(userId.value)}`,
-    );
+    const params = new URLSearchParams({
+      ownerUserId: userId.value,
+      category: categoryQueryParam(category.value),
+    });
+    items.value = await fetchEquipment(`?${params.toString()}`);
   } catch (e) {
     error.value = e.message;
     items.value = [];
@@ -230,6 +271,11 @@ watch(userId, (id) => {
   query.value = '';
   condition.value = '';
   load();
+});
+
+watch(category, async () => {
+  userId.value = '';
+  await loadUsers();
 });
 
 watch(filtered, () => {

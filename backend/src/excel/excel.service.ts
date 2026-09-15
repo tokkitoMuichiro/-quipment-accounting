@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BitrixService } from '../bitrix/bitrix.service';
+import { cardKindLabel, vehicleKindLabel } from '../equipment/asset-helpers';
 
 const CONDITION_LABEL: Record<string, string> = {
   OK: 'Исправное',
@@ -40,6 +41,33 @@ export class ExcelService implements OnModuleDestroy {
     }
   }
 
+  private ownerLabel(item: {
+    ownerType: string;
+    ownerUser?: { fullName: string } | null;
+    ownerWarehouse?: { name: string } | null;
+  }) {
+    return item.ownerType === 'USER'
+      ? item.ownerUser?.fullName || 'Не назначен'
+      : `База: ${item.ownerWarehouse?.name || 'не указана'}`;
+  }
+
+  private pendingLabel(item: {
+    pendingTransfer?: { status: string; toLabel?: string | null } | null;
+  }) {
+    return item.pendingTransfer?.status === 'PENDING'
+      ? item.pendingTransfer.toLabel || 'Да'
+      : '';
+  }
+
+  private styleHeader(sheet: ExcelJS.Worksheet) {
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1C2833' },
+    };
+  }
+
   async buildWorkbookBuffer(): Promise<Buffer> {
     const items = await this.prisma.equipment.findMany({
       include: {
@@ -47,17 +75,17 @@ export class ExcelService implements OnModuleDestroy {
         ownerWarehouse: true,
         pendingTransfer: true,
       },
-      orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }],
+      orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }, { plateNumber: 'asc' }],
     });
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Учёт оборудования';
     workbook.created = new Date();
-    const sheet = workbook.addWorksheet('Оборудование', {
+
+    const equipmentSheet = workbook.addWorksheet('Оборудование', {
       views: [{ state: 'frozen', ySplit: 1 }],
     });
-
-    sheet.columns = [
+    equipmentSheet.columns = [
       { header: 'Наименование', key: 'name', width: 36 },
       { header: 'Заводской номер', key: 'factoryNumber', width: 22 },
       { header: 'Кол-во', key: 'quantity', width: 10 },
@@ -69,26 +97,71 @@ export class ExcelService implements OnModuleDestroy {
       { header: 'Ожидает принятия', key: 'pending', width: 28 },
       { header: 'Дата обновления', key: 'updatedAt', width: 22 },
     ];
+    this.styleHeader(equipmentSheet);
 
-    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    sheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF1C2833' },
-    };
+    const vehicleSheet = workbook.addWorksheet('Транспорт', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+    vehicleSheet.columns = [
+      { header: 'Наименование', key: 'name', width: 36 },
+      { header: 'Госномер', key: 'plateNumber', width: 18 },
+      { header: 'Вид ТС', key: 'vehicleKind', width: 18 },
+      { header: 'Состояние', key: 'condition', width: 32 },
+      { header: 'Пояснение', key: 'conditionNote', width: 40 },
+      { header: 'Владелец', key: 'owner', width: 36 },
+      { header: 'Ожидает принятия', key: 'pending', width: 28 },
+      { header: 'Дата обновления', key: 'updatedAt', width: 22 },
+    ];
+    this.styleHeader(vehicleSheet);
+
+    const cardSheet = workbook.addWorksheet('Карты', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+    cardSheet.columns = [
+      { header: 'Вид карты', key: 'cardKind', width: 22 },
+      { header: 'Номер', key: 'cardNumber', width: 22 },
+      { header: 'Наименование', key: 'name', width: 36 },
+      { header: 'Владелец', key: 'owner', width: 36 },
+      { header: 'Ожидает принятия', key: 'pending', width: 28 },
+      { header: 'Дата обновления', key: 'updatedAt', width: 22 },
+    ];
+    this.styleHeader(cardSheet);
 
     for (const item of items) {
-      const owner =
-        item.ownerType === 'USER'
-          ? item.ownerUser?.fullName || 'Не назначен'
-          : `База: ${item.ownerWarehouse?.name || 'не указана'}`;
+      const owner = this.ownerLabel(item);
+      const pending = this.pendingLabel(item);
+      const updatedAt = item.updatedAt.toLocaleString('ru-RU');
 
-      const pending =
-        item.pendingTransfer?.status === 'PENDING'
-          ? item.pendingTransfer.toLabel || 'Да'
-          : '';
+      if (item.category === 'VEHICLE') {
+        vehicleSheet.addRow({
+          name: item.name,
+          plateNumber: item.plateNumber || '',
+          vehicleKind: vehicleKindLabel(item.vehicleKind),
+          condition: CONDITION_LABEL[item.condition] || item.condition,
+          conditionNote: item.conditionNote || '',
+          owner,
+          pending,
+          updatedAt,
+        });
+        continue;
+      }
 
-      sheet.addRow({
+      if (item.category === 'CARD') {
+        cardSheet.addRow({
+          cardKind: cardKindLabel(item.cardKind),
+          cardNumber:
+            item.cardKind === 'BUSINESS' && item.cardNumber
+              ? `****${item.cardNumber}`
+              : item.cardNumber || '',
+          name: item.name,
+          owner,
+          pending,
+          updatedAt,
+        });
+        continue;
+      }
+
+      equipmentSheet.addRow({
         name: item.name,
         factoryNumber: item.factoryNumber || '',
         quantity: item.quantity,
@@ -98,7 +171,7 @@ export class ExcelService implements OnModuleDestroy {
         type: item.type === 'SERIAL' ? 'Серийное' : 'Неномерное',
         owner,
         pending,
-        updatedAt: item.updatedAt.toLocaleString('ru-RU'),
+        updatedAt,
       });
     }
 

@@ -1,7 +1,8 @@
 import { api } from './client';
 
-export function fetchUsers() {
-  return api('/users');
+export function fetchUsers(category) {
+  const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+  return api(`/users${qs}`);
 }
 
 export function fetchEmployees() {
@@ -12,8 +13,9 @@ export function fetchWarehouses() {
   return api('/warehouses');
 }
 
-export function fetchWarehouse(id) {
-  return api(`/warehouses/${id}`);
+export function fetchWarehouse(id, category) {
+  const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+  return api(`/warehouses/${id}${qs}`);
 }
 
 export function fetchTransfers() {

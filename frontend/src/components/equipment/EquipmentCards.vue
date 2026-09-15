@@ -52,9 +52,9 @@
         />
       </div>
       <div class="eq-card__meta">
-        <span>Заводской номер <strong class="mono">{{ item.factoryNumber || '—' }}</strong></span>
-        <span>Кол-во <strong>{{ item.quantity }}</strong></span>
-        <label class="eq-card__docs" @click.stop>
+        <span>{{ identityColumnTitle(category) }} <strong class="mono">{{ identityLabel(item) }}</strong></span>
+        <span v-if="category === 'EQUIPMENT'">Кол-во <strong>{{ item.quantity }}</strong></span>
+        <label v-if="category === 'EQUIPMENT'" class="eq-card__docs" @click.stop>
           <input
             :key="`${item.id}-docs-${docsNonce}`"
             class="checkbox"
@@ -66,7 +66,7 @@
           />
           Паспорта и сертификаты
         </label>
-        <span>
+        <span v-if="category !== 'CARD'">
           Состояние
           <ConditionSelect
             v-if="canChange(item)"
@@ -78,7 +78,7 @@
           />
           <StatusBadge v-else :value="item.condition" :note="item.conditionNote" />
         </span>
-        <p v-if="item.conditionNote" class="eq-card__note">{{ item.conditionNote }}</p>
+        <p v-if="category !== 'CARD' && item.conditionNote" class="eq-card__note">{{ item.conditionNote }}</p>
         <span v-if="showRepairSender">
           Кто отправил
           <strong>{{ repairSenderLabel(item) || '—' }}</strong>
@@ -143,7 +143,7 @@ import ConditionSelect from './ConditionSelect.vue';
 import './styles/EquipmentCards.scss';
 import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
-import { FILL_STATUS_LABEL, ownerLabel, pendingOfferLabel, repairSenderLabel, typeLabel } from '../../utils/format';
+import { FILL_STATUS_LABEL, identityColumnTitle, identityLabel, ownerLabel, pendingOfferLabel, repairSenderLabel, typeLabel } from '../../utils/format';
 import {
   canAcceptTransfer,
   canCancelPendingTransfer,
@@ -161,6 +161,7 @@ import {
 
 defineProps({
   items: { type: Array, default: () => [] },
+  category: { type: String, default: 'EQUIPMENT' },
   selectable: { type: Boolean, default: false },
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },

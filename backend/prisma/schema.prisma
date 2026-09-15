@@ -36,6 +36,26 @@ enum FillStatus {
   PENDING_REVIEW
 }
 
+enum AssetCategory {
+  EQUIPMENT
+  VEHICLE
+  CARD
+}
+
+enum VehicleKind {
+  PASSENGER
+  TRUCK
+  SPECIAL
+  MOTORCYCLE
+  TRAILER
+}
+
+enum CardKind {
+  TRANSPONDER
+  FUEL
+  BUSINESS
+}
+
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -94,6 +114,11 @@ model Equipment {
   condition        EquipmentCondition
   conditionNote    String?
   hasDocuments     Boolean             @default(false)
+  category         AssetCategory       @default(EQUIPMENT)
+  plateNumber      String?
+  vehicleKind      VehicleKind?
+  cardKind         CardKind?
+  cardNumber       String?
   ownerType        OwnerType
   ownerUserId      String?
   ownerWarehouseId String?
@@ -112,6 +137,8 @@ model Equipment {
 
   @@index([factoryNumber])
   @@index([fillStatus])
+  @@index([category])
+  @@unique([plateNumber])
 }
 
 model Transfer {
