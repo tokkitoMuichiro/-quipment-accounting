@@ -43,3 +43,21 @@ export function flagFill(id, comment) {
 export function confirmFill(id) {
   return api(`/equipment/${id}/confirm-fill`, { method: 'POST' });
 }
+
+export function listDocuments(equipmentId) {
+  return api(`/equipment/${equipmentId}/documents`);
+}
+
+export function uploadDocument(equipmentId, file) {
+  const body = new FormData();
+  body.append('file', file);
+  return api(`/equipment/${equipmentId}/documents`, { method: 'POST', body });
+}
+
+export function downloadDocument(documentId) {
+  return api(`/documents/${documentId}/download`);
+}
+
+export function deleteDocument(documentId) {
+  return api(`/documents/${documentId}`, { method: 'DELETE' });
+}

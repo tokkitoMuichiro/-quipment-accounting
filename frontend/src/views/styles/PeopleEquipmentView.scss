@@ -4,6 +4,17 @@
   width: 100%;
 }
 
+.people-back-btn {
+  background: $color-white-smoke;
+  border-color: $color-line;
+  color: $color-ink;
+}
+
+.people-back-btn:hover {
+  background: $color-lavender;
+  filter: none;
+}
+
 .people-row {
   cursor: pointer;
   transition: background 0.15s ease;

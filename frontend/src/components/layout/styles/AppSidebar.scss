@@ -53,6 +53,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   width: 100%;
   border: 0;
   background: transparent;
@@ -60,10 +61,11 @@
   padding: 12px 14px;
   border-radius: $radius;
   color: $color-lavender;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  line-height: 1.25;
   cursor: pointer;
 }
 
