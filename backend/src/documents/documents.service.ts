@@ -11,6 +11,7 @@ import {
   DOC_ALLOWED_MIME,
   DOC_MAX_BYTES,
   UploadedMemoryFile,
+  decodeUploadFileName,
 } from '../bitrix/document.constants';
 import { ExcelService } from '../excel/excel.service';
 
@@ -83,7 +84,9 @@ export class DocumentsService {
 
     const portal = await this.disk.requirePortal();
     const folderId = await this.disk.ensureEquipmentFolder(portal, item);
-    const safeName = file.originalname.replace(/[\\/]+/g, '_').slice(0, 180);
+    const safeName = decodeUploadFileName(file.originalname)
+      .replace(/[\\/]+/g, '_')
+      .slice(0, 180);
     const bitrixFileId = await this.disk.uploadToFolder(
       portal,
       folderId,

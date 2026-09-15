@@ -19,6 +19,23 @@ export function equipmentFolderName(input: {
   return `Позиция ${input.id.slice(0, 8)}`;
 }
 
+export function decodeUploadFileName(raw: string): string {
+  const name = String(raw || '').trim();
+  if (!name) return 'document';
+  // Multer/busboy часто отдаёт UTF-8 имя как Latin-1 («Ð¡Ð¢Ð¡…»).
+  if (/[ÐÑ]/.test(name) || /Ã./.test(name)) {
+    try {
+      const fixed = Buffer.from(name, 'latin1').toString('utf8');
+      if (fixed && !fixed.includes('\uFFFD')) {
+        return fixed;
+      }
+    } catch {
+      /* keep original */
+    }
+  }
+  return name;
+}
+
 export type UploadedMemoryFile = {
   buffer: Buffer;
   originalname: string;

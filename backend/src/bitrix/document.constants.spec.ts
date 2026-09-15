@@ -1,4 +1,7 @@
-import { equipmentFolderName } from '../bitrix/document.constants';
+import {
+  decodeUploadFileName,
+  equipmentFolderName,
+} from './document.constants';
 
 describe('equipmentFolderName', () => {
   it('builds equipment name with factory number', () => {
@@ -31,5 +34,16 @@ describe('equipmentFolderName', () => {
         category: 'EQUIPMENT',
       }),
     ).toBe('Позиция abcdefgh');
+  });
+});
+
+describe('decodeUploadFileName', () => {
+  it('fixes latin1-misread UTF-8 filenames', () => {
+    const garbled = Buffer.from('СТС Камаз.pdf', 'utf8').toString('latin1');
+    expect(decodeUploadFileName(garbled)).toBe('СТС Камаз.pdf');
+  });
+
+  it('keeps normal utf8 names', () => {
+    expect(decodeUploadFileName('паспорт.pdf')).toBe('паспорт.pdf');
   });
 });

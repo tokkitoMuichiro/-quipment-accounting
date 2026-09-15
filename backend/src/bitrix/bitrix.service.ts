@@ -270,6 +270,40 @@ export class BitrixService {
     }
   }
 
+  /**
+   * Bitrix REST надёжнее принимает application/x-www-form-urlencoded с UTF-8
+   * (JSON без явного charset на части порталов даёт кракозябры в NAME).
+   */
+  private toFormBody(params: Record<string, unknown>): string {
+    const parts: string[] = [];
+
+    const append = (key: string, value: unknown) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((entry, index) => append(`${key}[${index}]`, entry));
+        return;
+      }
+      if (typeof value === 'object') {
+        for (const [childKey, childValue] of Object.entries(
+          value as Record<string, unknown>,
+        )) {
+          append(`${key}[${childKey}]`, childValue);
+        }
+        return;
+      }
+      parts.push(
+        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
+      );
+    };
+
+    for (const [key, value] of Object.entries(params)) {
+      append(key, value);
+    }
+    return parts.join('&');
+  }
+
   async call(
     domain: string,
     method: string,
@@ -279,11 +313,13 @@ export class BitrixService {
   ) {
     this.assertAllowedDomain(domain);
     const url = `https://${domain}/rest/${method}.json`;
-    const { data } = await axios.post(
-      url,
-      { ...params, auth: accessToken },
-      { timeout: timeoutMs },
-    );
+    const body = this.toFormBody({ ...params, auth: accessToken });
+    const { data } = await axios.post(url, body, {
+      timeout: timeoutMs,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      },
+    });
 
     if (data?.error) {
       const err = new Error(data.error_description || data.error);
