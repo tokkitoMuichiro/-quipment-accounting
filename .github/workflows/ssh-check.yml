@@ -1,0 +1,17 @@
+name: SSH check
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH ping
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "SSH_OK"
+            hostname
+            test -d "${{ secrets.DEPLOY_PATH || '/var/www/equipment' }}" && echo "DEPLOY_PATH_OK"
