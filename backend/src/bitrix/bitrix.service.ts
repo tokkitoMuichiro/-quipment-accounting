@@ -275,13 +275,14 @@ export class BitrixService {
     method: string,
     params: Record<string, unknown>,
     accessToken: string,
+    timeoutMs = 20_000,
   ) {
     this.assertAllowedDomain(domain);
     const url = `https://${domain}/rest/${method}.json`;
     const { data } = await axios.post(
       url,
       { ...params, auth: accessToken },
-      { timeout: 20000 },
+      { timeout: timeoutMs },
     );
 
     if (data?.error) {
@@ -342,10 +343,17 @@ export class BitrixService {
     },
     method: string,
     params: Record<string, unknown> = {},
+    timeoutMs = 20_000,
   ) {
     const opened = this.decryptPortal(portal);
     try {
-      return await this.call(opened.domain, method, params, opened.accessToken);
+      return await this.call(
+        opened.domain,
+        method,
+        params,
+        opened.accessToken,
+        timeoutMs,
+      );
     } catch (error: any) {
       const code = error?.bitrix?.error;
       if (code === 'expired_token' || code === 'INVALID_TOKEN') {
@@ -356,6 +364,7 @@ export class BitrixService {
             method,
             params,
             refreshed.accessToken,
+            timeoutMs,
           );
         }
       }

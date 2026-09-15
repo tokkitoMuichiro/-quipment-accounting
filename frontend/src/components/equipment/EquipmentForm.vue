@@ -91,10 +91,9 @@
             placeholder="Что случилось, что сломалось, причина"
           />
         </label>
-        <label v-if="category === 'EQUIPMENT'" class="check-field">
-          <input v-model="form.hasDocuments" type="checkbox" class="checkbox" />
-          Есть паспорта и сертификаты
-        </label>
+        <div v-if="supportsDocs" class="desktop-only">
+          <DocumentDropzone v-model:files="pendingFiles" :disabled="saving" />
+        </div>
       </template>
 
       <template v-if="!item && (category === 'CARD' || form.condition !== 'IN_REPAIR')">
@@ -134,9 +133,10 @@
 import { computed, reactive, ref, watch } from 'vue';
 import AppModal from '../ui/AppModal.vue';
 import ConditionSelect from './ConditionSelect.vue';
+import DocumentDropzone from './DocumentDropzone.vue';
 import { canEditItemCard } from '../../utils/access';
 import { fetchUsers, fetchWarehouses } from '../../api/catalog';
-import { createEquipment, updateEquipment } from '../../api/equipment';
+import { createEquipment, updateEquipment, uploadDocument } from '../../api/equipment';
 import { useAuthStore } from '../../stores/auth';
 import {
   CARD_KIND_OPTIONS,
@@ -156,10 +156,14 @@ const users = ref([]);
 const warehouses = ref([]);
 const saving = ref(false);
 const error = ref('');
+const pendingFiles = ref([]);
 const canAssignAnyone = computed(
   () => auth.can('view_all') || auth.can('manage_warehouses') || auth.can('manage_roles'),
 );
 const category = computed(() => props.item?.category || props.category || 'EQUIPMENT');
+const supportsDocs = computed(
+  () => !props.item && (category.value === 'EQUIPMENT' || category.value === 'VEHICLE'),
+);
 const modalTitle = computed(() => {
   if (!props.item) {
     if (category.value === 'VEHICLE') return 'Новый транспорт';
@@ -188,7 +192,6 @@ const form = reactive({
   quantity: 1,
   condition: 'OK',
   conditionNote: '',
-  hasDocuments: false,
   plateNumber: '',
   vehicleKind: '',
   cardKind: '',
@@ -229,6 +232,7 @@ async function submit() {
   saving.value = true;
   error.value = '';
   try {
+    let created = null;
     if (props.item) {
       if (category.value === 'VEHICLE') {
         await updateEquipment(props.item.id, {
@@ -251,7 +255,7 @@ async function submit() {
         });
       }
     } else if (category.value === 'VEHICLE') {
-      await createEquipment({
+      created = await createEquipment({
         category: 'VEHICLE',
         name: form.name,
         plateNumber: form.plateNumber,
@@ -264,7 +268,7 @@ async function submit() {
           form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
     } else if (category.value === 'CARD') {
-      await createEquipment({
+      created = await createEquipment({
         category: 'CARD',
         name: form.cardKind === 'TRANSPONDER' ? form.name : undefined,
         cardKind: form.cardKind,
@@ -275,7 +279,7 @@ async function submit() {
           form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
     } else {
-      await createEquipment({
+      created = await createEquipment({
         category: 'EQUIPMENT',
         name: form.name,
         type: form.type,
@@ -283,12 +287,29 @@ async function submit() {
         quantity: form.type === 'CONSUMABLE' ? form.quantity : 1,
         condition: form.condition,
         conditionNote: needsNote.value ? form.conditionNote.trim() : null,
-        hasDocuments: form.hasDocuments,
         ownerType: form.ownerType,
         ownerUserId: form.ownerType === 'USER' ? form.ownerUserId : undefined,
         ownerWarehouseId:
           form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
+    }
+
+    if (created?.id && pendingFiles.value.length) {
+      const failed = [];
+      for (const file of pendingFiles.value) {
+        try {
+          await uploadDocument(created.id, file);
+        } catch (e) {
+          failed.push(file.name);
+          error.value = e.message;
+        }
+      }
+      pendingFiles.value = [];
+      if (failed.length) {
+        error.value = `Позиция создана, но не загрузились: ${failed.join(', ')}. Можно добавить в карточке позиции.`;
+        emit('saved');
+        return;
+      }
     }
     emit('saved');
   } catch (e) {

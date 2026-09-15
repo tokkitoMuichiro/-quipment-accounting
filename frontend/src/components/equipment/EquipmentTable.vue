@@ -14,11 +14,24 @@
             />
           </th>
           <th class="eq-col-name">Наименование</th>
-          <th class="eq-col-serial">{{ identityColumnTitle(category) }}</th>
-          <th v-if="category === 'EQUIPMENT'" class="eq-col-qty">Кол-во</th>
-          <th v-if="category === 'EQUIPMENT'" class="eq-col-docs" title="Паспорта и сертификаты">Пасп.</th>
-          <th v-if="category !== 'CARD'" class="eq-col-condition">Состояние</th>
-          <th class="eq-col-owner">{{ showRepairSender ? 'Кто отправил' : 'Владелец' }}</th>
+          <th class="eq-col-serial">
+            <span v-if="category === 'VEHICLE'" class="eq-th-stack">Госномер</span>
+            <span v-else-if="category === 'CARD'" class="eq-th-stack">Номер</span>
+            <span v-else class="eq-th-stack">Заводской<br />номер</span>
+          </th>
+          <th v-if="category === 'EQUIPMENT'" class="eq-col-qty">
+            <span class="eq-th-stack">Кол-во</span>
+          </th>
+          <th v-if="category !== 'CARD'" class="eq-col-docs" title="Паспорта и сертификаты">
+            <span class="eq-th-stack">Пасп.<br />серт.</span>
+          </th>
+          <th v-if="category !== 'CARD'" class="eq-col-condition">
+            <span class="eq-th-stack">Состояние</span>
+          </th>
+          <th class="eq-col-owner">
+            <span v-if="showRepairSender" class="eq-th-stack">Кто<br />отправил</span>
+            <span v-else class="eq-th-stack">Владелец</span>
+          </th>
           <th class="eq-col-actions"></th>
         </tr>
       </thead>
@@ -26,14 +39,16 @@
         <tr
           v-for="item in items"
           :key="item.id"
+          class="eq-row--clickable"
           :class="{
             'is-selected': isSelected(item.id),
             'is-pending': isPending(item),
             'is-fill-fix': isNeedsFix(item),
             'is-fill-review': isPendingReview(item),
           }"
+          @click="$emit('open', item)"
         >
-          <td v-if="selectable" class="eq-col-check">
+          <td v-if="selectable" class="eq-col-check" @click.stop>
             <input
               class="checkbox"
               type="checkbox"
@@ -58,20 +73,17 @@
             {{ identityLabel(item) }}
           </td>
           <td v-if="category === 'EQUIPMENT'" class="eq-col-qty">{{ item.quantity }}</td>
-          <td v-if="category === 'EQUIPMENT'" class="eq-col-docs">
+          <td v-if="category !== 'CARD'" class="eq-col-docs" @click.stop>
             <input
-              :key="`${item.id}-docs-${docsNonce}`"
               class="checkbox"
               type="checkbox"
               :checked="Boolean(item.hasDocuments)"
-              :disabled="!canEditDocs(item)"
-              title="Паспорта и сертификаты"
+              disabled
+              title="Есть загруженные документы"
               :aria-label="`Паспорта и сертификаты: ${item.name}`"
-              @click.stop
-              @change="$emit('documents-change', { item, hasDocuments: $event.target.checked })"
             />
           </td>
-          <td v-if="category !== 'CARD'" class="eq-col-condition">
+          <td v-if="category !== 'CARD'" class="eq-col-condition" @click.stop>
             <ConditionSelect
               v-if="canChange(item)"
               :key="`${item.id}-${item.condition}-${conditionNonce}`"
@@ -95,7 +107,7 @@
               <div class="muted">{{ pendingOfferLabel(item) }}</div>
             </div>
           </td>
-          <td class="eq-col-actions">
+          <td class="eq-col-actions" @click.stop>
             <div class="eq-row-actions">
               <button
                 v-if="canAccept(item)"
@@ -156,7 +168,6 @@ import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
 import {
   FILL_STATUS_LABEL,
-  identityColumnTitle,
   identityLabel,
   ownerLabel,
   pendingOfferLabel,
@@ -169,7 +180,6 @@ import {
   canChangeConditionItem,
   canConfirmFill,
   canDeleteItem,
-  canEditDocumentsItem,
   canEditItemCard,
   canFlagFill,
   canTransferItem,
@@ -186,10 +196,10 @@ defineProps({
   allSelected: { type: Boolean, default: false },
   someSelected: { type: Boolean, default: false },
   conditionNonce: { type: Number, default: 0 },
-  docsNonce: { type: Number, default: 0 },
   showRepairSender: { type: Boolean, default: false },
 });
 defineEmits([
+  'open',
   'transfer',
   'accept',
   'cancel-pending',
@@ -198,7 +208,6 @@ defineEmits([
   'toggle',
   'toggle-all',
   'condition-change',
-  'documents-change',
   'flag-fill',
   'confirm-fill',
 ]);
@@ -209,7 +218,6 @@ const canAccept = (item) => canAcceptTransfer(auth, item);
 const canCancel = (item) => canCancelPendingTransfer(auth, item);
 const isPending = (item) => isPendingAccept(item);
 const canChange = (item) => canChangeConditionItem(auth, item);
-const canEditDocs = (item) => canEditDocumentsItem(auth, item) || canEditItemCard(auth, item);
 const canDelete = (item) => canDeleteItem(auth, item);
 const canEditCard = (item) => canEditItemCard(auth, item);
 const canFlag = (item) => canFlagFill(auth, item);

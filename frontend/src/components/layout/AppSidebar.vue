@@ -7,7 +7,7 @@
     <nav class="nav" @click="onNavClick">
       <div class="nav__block">
         <button type="button" class="nav__parent" @click.stop="toggle('mine')">
-          Моё
+          Мое оборудование
           <span class="nav__chevron" :class="{ 'is-open': openGroups.mine }">▾</span>
         </button>
         <div v-show="openGroups.mine" class="nav__sub">
@@ -18,7 +18,7 @@
       </div>
       <div class="nav__block">
         <button type="button" class="nav__parent" @click.stop="toggle('people')">
-          У сотрудников
+          Оборудование у сотрудников
           <span class="nav__chevron" :class="{ 'is-open': openGroups.people }">▾</span>
         </button>
         <div v-show="openGroups.people" class="nav__sub">
@@ -29,7 +29,7 @@
       </div>
       <div v-if="auth.can('view_all')" class="nav__block">
         <button type="button" class="nav__parent" @click.stop="toggle('fleet')">
-          Всё
+          Все оборудование
           <span class="nav__chevron" :class="{ 'is-open': openGroups.fleet }">▾</span>
         </button>
         <div v-show="openGroups.fleet" class="nav__sub">

@@ -8,8 +8,8 @@
       :all-selected="allSelected"
       :some-selected="someSelected"
       :condition-nonce="conditionNonce"
-      :docs-nonce="docsNonce"
       :show-repair-sender="showRepairSender"
+      @open="detailItem = $event"
       @transfer="$emit('transfer', $event)"
       @accept="onAccept"
       @cancel-pending="onCancelPending"
@@ -18,7 +18,6 @@
       @toggle="$emit('toggle', $event)"
       @toggle-all="$emit('toggle-all')"
       @condition-change="onConditionChange"
-      @documents-change="onDocumentsChange"
       @flag-fill="onFlagFill"
       @confirm-fill="onConfirmFill"
     />
@@ -30,8 +29,8 @@
       :all-selected="allSelected"
       :some-selected="someSelected"
       :condition-nonce="conditionNonce"
-      :docs-nonce="docsNonce"
       :show-repair-sender="showRepairSender"
+      @open="detailItem = $event"
       @transfer="$emit('transfer', $event)"
       @accept="onAccept"
       @cancel-pending="onCancelPending"
@@ -40,7 +39,6 @@
       @toggle="$emit('toggle', $event)"
       @toggle-all="$emit('toggle-all')"
       @condition-change="onConditionChange"
-      @documents-change="onDocumentsChange"
       @flag-fill="onFlagFill"
       @confirm-fill="onConfirmFill"
     />
@@ -51,6 +49,13 @@
       @close="cancelPending"
       @saved="onNoteSaved"
     />
+    <EquipmentDetailModal
+      v-if="detailItem"
+      :item="detailItem"
+      @close="detailItem = null"
+      @edit="onDetailEdit"
+      @updated="onDetailUpdated"
+    />
   </div>
 </template>
 
@@ -59,10 +64,9 @@ import { ref } from 'vue';
 import EquipmentTable from './EquipmentTable.vue';
 import EquipmentCards from './EquipmentCards.vue';
 import ConditionNoteModal from './ConditionNoteModal.vue';
+import EquipmentDetailModal from './EquipmentDetailModal.vue';
 import './styles/EquipmentBoard.scss';
-import { acceptTransfer, cancelPendingTransfer, confirmFill, flagFill, updateEquipment } from '../../api/equipment';
-import { useAuthStore } from '../../stores/auth';
-import { canEditDocumentsItem, canEditItemCard } from '../../utils/access';
+import { acceptTransfer, cancelPendingTransfer, confirmFill, flagFill } from '../../api/equipment';
 
 defineProps({
   items: { type: Array, default: () => [] },
@@ -76,16 +80,11 @@ defineProps({
 const emit = defineEmits(['transfer', 'edit', 'remove', 'toggle', 'toggle-all', 'updated']);
 
 const pending = ref(null);
+const detailItem = ref(null);
 const conditionNonce = ref(0);
-const docsNonce = ref(0);
-const auth = useAuthStore();
 
 function bumpNonce() {
   conditionNonce.value += 1;
-}
-
-function bumpDocsNonce() {
-  docsNonce.value += 1;
 }
 
 function onConditionChange({ item, condition }) {
@@ -93,36 +92,18 @@ function onConditionChange({ item, condition }) {
   pending.value = { item, condition };
 }
 
-async function onDocumentsChange({ item, hasDocuments }) {
-  if (!item || Boolean(item.hasDocuments) === Boolean(hasDocuments)) {
-    bumpDocsNonce();
-    return;
-  }
-  if (!canEditDocumentsItem(auth, item) && !canEditItemCard(auth, item)) {
-    bumpDocsNonce();
-    return;
-  }
-  const ok = window.confirm(
-    hasDocuments
-      ? `Отметить наличие паспортов и сертификатов у «${item.name}»?`
-      : `Снять отметку о паспортах и сертификатах у «${item.name}»?`,
-  );
-  if (!ok) {
-    bumpDocsNonce();
-    return;
-  }
-  try {
-    await updateEquipment(item.id, { hasDocuments });
-    emit('updated');
-  } catch (e) {
-    bumpDocsNonce();
-    window.alert(e.message);
-  }
-}
-
 function cancelPending() {
   pending.value = null;
   bumpNonce();
+}
+
+function onDetailEdit(item) {
+  detailItem.value = null;
+  emit('edit', item);
+}
+
+function onDetailUpdated() {
+  emit('updated');
 }
 
 async function onAccept(item) {

@@ -2,7 +2,7 @@
   <section>
     <PageHeader :title="pageTitle" :subtitle="pageSubtitle">
       <template v-if="userId" #actions>
-        <button type="button" class="btn btn--ghost" @click="backToPeople">
+        <button type="button" class="btn btn--ghost people-back-btn" @click="backToPeople">
           К списку сотрудников
         </button>
       </template>

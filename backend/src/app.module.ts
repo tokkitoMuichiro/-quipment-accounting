@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { EquipmentModule } from './equipment/equipment.module';
 import { ExcelModule } from './excel/excel.module';
+import { DocumentsModule } from './documents/documents.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -26,6 +27,7 @@ import { HealthController } from './health.controller';
     WarehousesModule,
     EquipmentModule,
     ExcelModule,
+    DocumentsModule,
   ],
   controllers: [HealthController],
   providers: [

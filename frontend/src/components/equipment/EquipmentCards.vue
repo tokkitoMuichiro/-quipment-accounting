@@ -13,7 +13,7 @@
     <article
       v-for="item in items"
       :key="item.id"
-      class="eq-card"
+      class="eq-card eq-card--clickable"
       :class="{
         'is-selected': isSelected(item.id),
         'is-pending': isPending(item),
@@ -21,8 +21,9 @@
         'is-fill-review': isPendingReview(item),
         'eq-card--no-mutate': !(canEditCard(item) || canDelete(item)),
       }"
+      @click="$emit('open', item)"
     >
-      <div class="eq-card__head">
+      <div class="eq-card__head" @click.stop>
         <input
           v-if="selectable"
           class="checkbox"
@@ -32,7 +33,7 @@
           :aria-label="`Выбрать ${item.name}`"
           @change="$emit('toggle', item.id)"
         />
-        <div class="eq-card__title">
+        <div class="eq-card__title" @click.stop="$emit('open', item)">
           <strong>{{ item.name }}</strong>
           <div class="muted">{{ typeLabel(item) }}</div>
           <div v-if="isNeedsFix(item) || isPendingReview(item)" class="eq-fill">
@@ -54,19 +55,17 @@
       <div class="eq-card__meta">
         <span>{{ identityColumnTitle(category) }} <strong class="mono">{{ identityLabel(item) }}</strong></span>
         <span v-if="category === 'EQUIPMENT'">Кол-во <strong>{{ item.quantity }}</strong></span>
-        <label v-if="category === 'EQUIPMENT'" class="eq-card__docs" @click.stop>
+        <label v-if="category !== 'CARD'" class="eq-card__docs" @click.stop>
           <input
-            :key="`${item.id}-docs-${docsNonce}`"
             class="checkbox"
             type="checkbox"
             :checked="Boolean(item.hasDocuments)"
-            :disabled="!canEditDocs(item)"
+            disabled
             :aria-label="`Паспорта и сертификаты: ${item.name}`"
-            @change="$emit('documents-change', { item, hasDocuments: $event.target.checked })"
           />
           Паспорта и сертификаты
         </label>
-        <span v-if="category !== 'CARD'">
+        <span v-if="category !== 'CARD'" @click.stop>
           Состояние
           <ConditionSelect
             v-if="canChange(item)"
@@ -95,6 +94,7 @@
       <div
         v-if="canAccept(item) || canCancel(item) || canTransfer(item) || canFlag(item) || canConfirm(item)"
         class="eq-card__actions"
+        @click.stop
       >
         <button
           v-if="canAccept(item)"
@@ -150,7 +150,6 @@ import {
   canChangeConditionItem,
   canConfirmFill,
   canDeleteItem,
-  canEditDocumentsItem,
   canEditItemCard,
   canFlagFill,
   canTransferItem,
@@ -167,10 +166,10 @@ defineProps({
   allSelected: { type: Boolean, default: false },
   someSelected: { type: Boolean, default: false },
   conditionNonce: { type: Number, default: 0 },
-  docsNonce: { type: Number, default: 0 },
   showRepairSender: { type: Boolean, default: false },
 });
 defineEmits([
+  'open',
   'transfer',
   'accept',
   'cancel-pending',
@@ -179,7 +178,6 @@ defineEmits([
   'toggle',
   'toggle-all',
   'condition-change',
-  'documents-change',
   'flag-fill',
   'confirm-fill',
 ]);
@@ -190,7 +188,6 @@ const canAccept = (item) => canAcceptTransfer(auth, item);
 const canCancel = (item) => canCancelPendingTransfer(auth, item);
 const isPending = (item) => isPendingAccept(item);
 const canChange = (item) => canChangeConditionItem(auth, item);
-const canEditDocs = (item) => canEditDocumentsItem(auth, item) || canEditItemCard(auth, item);
 const canDelete = (item) => canDeleteItem(auth, item);
 const canEditCard = (item) => canEditItemCard(auth, item);
 const canFlag = (item) => canFlagFill(auth, item);

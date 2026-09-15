@@ -17,6 +17,10 @@
   overflow: hidden;
 }
 
+.eq-card--clickable {
+  cursor: pointer;
+}
+
 .eq-card--select-all {
   display: flex;
   gap: 10px;

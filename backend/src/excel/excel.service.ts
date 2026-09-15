@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BitrixService } from '../bitrix/bitrix.service';
+import { DiskService } from '../bitrix/disk.service';
 import { cardKindLabel, vehicleKindLabel } from '../equipment/asset-helpers';
 
 const CONDITION_LABEL: Record<string, string> = {
@@ -20,6 +21,7 @@ export class ExcelService implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bitrix: BitrixService,
+    private readonly disk: DiskService,
     private readonly config: ConfigService,
   ) {}
 
@@ -194,31 +196,24 @@ export class ExcelService implements OnModuleDestroy {
     const buffer = await this.buildWorkbookBuffer();
     const fileContent = buffer.toString('base64');
 
-    let folderId = portal.excelFolderId;
+    const hadAccounting = Boolean(portal.accountingFolderId);
+    const folderId = await this.disk.ensureAccountingFolder(portal);
     if (!folderId) {
-      const storage = await this.bitrix.callWithPortal(
-        portal,
-        'disk.storage.getforapp',
-      );
-      folderId = String(storage.result?.ROOT_OBJECT_ID || storage.result?.ID);
-      if (folderId) {
-        await this.prisma.bitrixPortal.update({
-          where: { id: portal.id },
-          data: { excelFolderId: folderId },
-        });
-      }
+      throw new Error('Не удалось получить папку «Учет оборудования» на общем диске');
     }
 
-    if (!folderId) {
-      throw new Error('Не удалось получить папку приложения на Диске Битрикс');
-    }
-
-    if (portal.excelFileId) {
+    const canVersion = hadAccounting && Boolean(portal.excelFileId);
+    if (canVersion) {
       try {
-        await this.bitrix.callWithPortal(portal, 'disk.file.uploadversion', {
-          id: portal.excelFileId,
-          fileContent: [filename, fileContent],
-        });
+        await this.bitrix.callWithPortal(
+          portal,
+          'disk.file.uploadversion',
+          {
+            id: portal.excelFileId,
+            fileContent: [filename, fileContent],
+          },
+          120_000,
+        );
         return { uploaded: true, fileId: portal.excelFileId };
       } catch (error) {
         this.logger.warn('uploadversion не удался, создаём файл заново', error);
@@ -234,13 +229,14 @@ export class ExcelService implements OnModuleDestroy {
         fileContent: [filename, fileContent],
         generateUniqueName: false,
       },
+      120_000,
     );
 
     const fileId = String(uploaded.result?.ID || uploaded.result?.id || '');
     if (fileId) {
       await this.prisma.bitrixPortal.update({
         where: { id: portal.id },
-        data: { excelFileId: fileId },
+        data: { excelFileId: fileId, excelFolderId: folderId },
       });
     }
 

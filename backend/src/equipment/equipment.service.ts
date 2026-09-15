@@ -18,7 +18,6 @@ import {
   AuthUser,
   canActOnItem,
   canDeleteItem,
-  canEditDocuments,
   canTransferFrom,
   isAdmin,
   canEditAllItems,
@@ -33,6 +32,7 @@ import {
   REPAIR_WAREHOUSE_SLUG,
 } from '../warehouses/repair-warehouse';
 import { NotifyService } from '../bitrix/notify.service';
+import { DiskService } from '../bitrix/disk.service';
 import {
   BulkTransferDto,
   CreateEquipmentDto,
@@ -74,6 +74,7 @@ export class EquipmentService {
     private readonly prisma: PrismaService,
     private readonly excel: ExcelService,
     private readonly notify: NotifyService,
+    private readonly disk: DiskService,
   ) {}
 
   private canSeeFillComment(user: AuthUser, item: { ownerUserId?: string | null }) {
@@ -384,7 +385,7 @@ export class EquipmentService {
         ownerType: dto.ownerType,
         ownerUserId: dto.ownerUserId,
         ownerWarehouseId: dto.ownerWarehouseId,
-        hasDocuments: dto.hasDocuments,
+        hasDocuments: false,
         conditionNote: dto.conditionNote,
       };
     }
@@ -449,7 +450,7 @@ export class EquipmentService {
         ownerType: dto.ownerType,
         ownerUserId: dto.ownerUserId,
         ownerWarehouseId: dto.ownerWarehouseId,
-        hasDocuments: dto.hasDocuments,
+        hasDocuments: false,
         conditionNote: dto.conditionNote,
       };
     }
@@ -467,7 +468,7 @@ export class EquipmentService {
       ownerType: dto.ownerType,
       ownerUserId: dto.ownerUserId,
       ownerWarehouseId: dto.ownerWarehouseId,
-      hasDocuments: dto.hasDocuments,
+      hasDocuments: false,
       conditionNote: dto.conditionNote,
     };
   }
@@ -512,7 +513,6 @@ export class EquipmentService {
           data: {
             quantity: { increment: data.quantity },
             conditionNote: conditionNote ?? existing.conditionNote,
-            hasDocuments: existing.hasDocuments || Boolean(dto.hasDocuments),
           },
           include: includeOwner,
         });
@@ -530,7 +530,7 @@ export class EquipmentService {
           quantity: data.quantity,
           condition: data.condition,
           conditionNote,
-          hasDocuments: Boolean(data.hasDocuments),
+          hasDocuments: false,
           category: data.category,
           plateNumber: data.plateNumber,
           vehicleKind: data.vehicleKind,
@@ -578,7 +578,6 @@ export class EquipmentService {
       dto.cardNumber !== undefined;
     const wantsCondition =
       dto.condition !== undefined || dto.conditionNote !== undefined;
-    const wantsDocs = dto.hasDocuments !== undefined;
 
     if (item.category === 'CARD' && wantsCondition) {
       throw new BadRequestException('У карт нет состояний');
@@ -597,12 +596,7 @@ export class EquipmentService {
         );
       }
     }
-    if (wantsDocs && !canEditDocuments(user, item) && !canOwnerFixCard) {
-      throw new ForbiddenException(
-        'Паспорта и сертификаты можно отмечать только у своего оборудования или на своей базе',
-      );
-    }
-    if (!wantsCard && !wantsCondition && !wantsDocs) {
+    if (!wantsCard && !wantsCondition) {
       return item;
     }
 
@@ -708,7 +702,7 @@ export class EquipmentService {
       fillOpen &&
         !canFullEdit &&
         canActOnItem(user, item) &&
-        (wantsCard || wantsDocs),
+        wantsCard,
     );
 
     try {
@@ -755,8 +749,6 @@ export class EquipmentService {
                 : undefined,
             condition: wantsCondition ? nextCondition : undefined,
             conditionNote,
-            hasDocuments:
-              wantsDocs && item.category !== 'CARD' ? dto.hasDocuments : undefined,
             ...(markPendingReview
               ? {
                   fillStatus: 'PENDING_REVIEW' as const,
@@ -785,8 +777,28 @@ export class EquipmentService {
         return updated.id;
       });
 
+      const refreshed = await this.get(resultId, user);
+      if (
+        item.bitrixFolderId &&
+        item.category !== 'CARD' &&
+        (refreshed.name !== item.name ||
+          refreshed.factoryNumber !== item.factoryNumber ||
+          refreshed.plateNumber !== item.plateNumber)
+      ) {
+        this.disk
+          .requirePortal()
+          .then((portal) =>
+            this.disk.renameEquipmentFolder(
+              portal,
+              item.bitrixFolderId!,
+              refreshed,
+            ),
+          )
+          .catch(() => undefined);
+      }
+
       this.excel.scheduleSync();
-      return this.get(resultId, user);
+      return refreshed;
     } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -1213,6 +1225,7 @@ export class EquipmentService {
       );
 
       if (item.type === 'CONSUMABLE' && dest) {
+        await this.reassignDocumentsTx(tx, item.id, dest.id);
         const moved = await tx.equipment.deleteMany({
           where: { id: item.id, quantity: qty },
         });
@@ -1272,7 +1285,7 @@ export class EquipmentService {
             quantity: qty,
             condition: item.condition,
             conditionNote: item.conditionNote,
-            hasDocuments: item.hasDocuments,
+            hasDocuments: false,
             ownerType: dto.toOwnerType,
             ownerUserId: dto.toOwnerType === 'USER' ? dto.toUserId : null,
             ownerWarehouseId:
@@ -1365,6 +1378,30 @@ export class EquipmentService {
       ? await tx.warehouse.findUnique({ where: { id: warehouseId } })
       : null;
     return w ? `База: ${w.name}` : 'Производственная база';
+  }
+
+  private async reassignDocumentsTx(
+    tx: Prisma.TransactionClient,
+    fromEquipmentId: string,
+    toEquipmentId: string,
+  ) {
+    if (fromEquipmentId === toEquipmentId) return;
+    await tx.equipmentDocument.updateMany({
+      where: { equipmentId: fromEquipmentId },
+      data: { equipmentId: toEquipmentId },
+    });
+    const [fromCount, toCount] = await Promise.all([
+      tx.equipmentDocument.count({ where: { equipmentId: fromEquipmentId } }),
+      tx.equipmentDocument.count({ where: { equipmentId: toEquipmentId } }),
+    ]);
+    await tx.equipment.update({
+      where: { id: fromEquipmentId },
+      data: { hasDocuments: fromCount > 0 },
+    });
+    await tx.equipment.update({
+      where: { id: toEquipmentId },
+      data: { hasDocuments: toCount > 0 },
+    });
   }
 
   private findConsumableLot(
