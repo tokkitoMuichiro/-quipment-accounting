@@ -6,4 +6,5 @@ module.exports = {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
   testEnvironment: 'node',
+  testTimeout: 30_000,
 };

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: equipment
+          POSTGRES_PASSWORD: equipment
+          POSTGRES_DB: equipment
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U equipment -d equipment"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://equipment:equipment@localhost:5432/equipment
+      JWT_SECRET: test-jwt-secret-min-16-chars
+      DEV_AUTH: "true"
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Backend — install, migrate, test, build
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npm test
+          npm run build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend — install and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build

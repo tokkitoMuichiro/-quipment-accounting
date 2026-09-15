@@ -4,6 +4,7 @@ dist/
 .env.local
 dev.local.md
 dev.local.*
+dev.local.cicd.md
 *.log
 .DS_Store
 Thumbs.db
@@ -17,6 +18,7 @@ backend/dist/
 backend/.env
 frontend/.env
 docker-data/
+.cursorrules
 
 # Nginx/серверные примеры — на машине приложения не нужны
 deploy/
