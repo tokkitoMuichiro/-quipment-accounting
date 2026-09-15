@@ -81,6 +81,7 @@ export function canCancelPendingTransfer(auth, item) {
 
 export function canChangeConditionItem(auth, item) {
   if (!item || !auth?.user) return false;
+  if (item.category === 'CARD') return false;
   if (isPendingAccept(item)) return false;
   if (isPrivileged(auth)) return true;
   if (!auth.can('edit_condition')) return false;
@@ -88,6 +89,7 @@ export function canChangeConditionItem(auth, item) {
 }
 
 export function canEditDocumentsItem(auth, item) {
+  if (item?.category === 'CARD') return false;
   return canActOnItem(auth, item);
 }
 

@@ -139,6 +139,56 @@ describe('API integration', () => {
       .expect(403);
   });
 
+  it('creates vehicle and card; card rejects condition change', async () => {
+    const owner = await devLogin(app, 'asset-owner');
+
+    const vehicle = await request(app.getHttpServer())
+      .post('/api/equipment')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({
+        category: 'VEHICLE',
+        name: 'Газель',
+        plateNumber: 'A123BC77',
+        vehicleKind: 'TRUCK',
+        condition: 'OK',
+        ownerType: 'USER',
+        ownerUserId: owner.user.id,
+      })
+      .expect(201);
+
+    expect(vehicle.body.category).toBe('VEHICLE');
+    expect(vehicle.body.plateNumber).toBe('A123BC77');
+
+    const listVehicles = await request(app.getHttpServer())
+      .get('/api/equipment?scope=mine&category=vehicle')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200);
+    expect(
+      listVehicles.body.some((row: { id: string }) => row.id === vehicle.body.id),
+    ).toBe(true);
+
+    const card = await request(app.getHttpServer())
+      .post('/api/equipment')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({
+        category: 'CARD',
+        cardKind: 'FUEL',
+        cardNumber: '998877',
+        ownerType: 'USER',
+        ownerUserId: owner.user.id,
+      })
+      .expect(201);
+
+    expect(card.body.category).toBe('CARD');
+    expect(card.body.condition).toBe('OK');
+
+    await request(app.getHttpServer())
+      .patch(`/api/equipment/${card.body.id}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ condition: 'NEEDS_REPAIR' })
+      .expect(400);
+  });
+
   it('transfer to user, accept, and cancel pending paths', async () => {
     const sender = await devLogin(app, 'sender-transfer');
     const recipient = await devLogin(app, 'recipient-transfer');

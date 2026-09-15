@@ -9,6 +9,8 @@ import {
   EquipmentType,
   OwnerType,
   Prisma,
+  AssetCategory,
+  CardKind,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExcelService } from '../excel/excel.service';
@@ -38,6 +40,13 @@ import {
   TransferEquipmentDto,
   UpdateEquipmentDto,
 } from './equipment.dto';
+import {
+  assetDisplayName,
+  defaultCardName,
+  normalizeCardNumber,
+  parseAssetCategory,
+} from './asset-helpers';
+import { normalizePlateNumber, isValidPlateNumber } from '../common/plate-number';
 
 const CONDITIONS_NEEDING_NOTE: Equipment['condition'][] = [
   'NEEDS_REPAIR',
@@ -167,6 +176,32 @@ export class EquipmentService {
     );
   }
 
+  private resolveCategory(raw?: string | AssetCategory | null): AssetCategory {
+    if (raw === 'VEHICLE' || raw === 'CARD' || raw === 'EQUIPMENT') {
+      return raw;
+    }
+    return parseAssetCategory(typeof raw === 'string' ? raw : undefined);
+  }
+
+  private requirePlate(raw?: string | null): string {
+    if (!raw?.trim() || !isValidPlateNumber(raw)) {
+      throw new BadRequestException(
+        'Госномер: буква, 3 цифры, 2 буквы и регион (1–3 цифры), например A123BC77',
+      );
+    }
+    return normalizePlateNumber(raw);
+  }
+
+  private requireCardNumber(cardKind: CardKind, raw?: string | null): string {
+    try {
+      return normalizeCardNumber(cardKind, raw || '');
+    } catch (e) {
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Некорректный номер карты',
+      );
+    }
+  }
+
   private visibleWhere(user: AuthUser): Prisma.EquipmentWhereInput {
     if (this.canViewAll(user)) {
       return {};
@@ -202,8 +237,10 @@ export class EquipmentService {
     scope?: string,
     warehouseId?: string,
     ownerUserId?: string,
+    categoryRaw?: string,
   ) {
-    const where: Prisma.EquipmentWhereInput = {};
+    const category = this.resolveCategory(categoryRaw);
+    const where: Prisma.EquipmentWhereInput = { category };
     if (ownerUserId) {
       where.OR = [
         { ownerType: 'USER', ownerUserId },
@@ -233,12 +270,13 @@ export class EquipmentService {
       ];
     } else {
       Object.assign(where, this.visibleWhere(user));
+      where.category = category;
     }
     return this.prisma.equipment
       .findMany({
         where,
         include: includeOwner,
-        orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }],
+        orderBy: [{ name: 'asc' }, { factoryNumber: 'asc' }, { plateNumber: 'asc' }],
       })
       .then((items) =>
         this.sortByFillPriority(items).map((item) =>
@@ -321,6 +359,76 @@ export class EquipmentService {
   }
 
   private normalizeCreate(dto: CreateEquipmentDto) {
+    const category = this.resolveCategory(dto.category);
+
+    if (category === 'VEHICLE') {
+      if (!dto.name?.trim() || dto.name.trim().length < 2) {
+        throw new BadRequestException('Укажите наименование транспорта');
+      }
+      if (!dto.vehicleKind) {
+        throw new BadRequestException('Укажите вид ТС');
+      }
+      const plateNumber = this.requirePlate(dto.plateNumber);
+      const condition = dto.condition || 'OK';
+      return {
+        category,
+        name: dto.name.trim(),
+        type: 'SERIAL' as const,
+        factoryNumber: plateNumber,
+        quantity: 1,
+        condition,
+        plateNumber,
+        vehicleKind: dto.vehicleKind,
+        cardKind: null as CardKind | null,
+        cardNumber: null as string | null,
+        ownerType: dto.ownerType,
+        ownerUserId: dto.ownerUserId,
+        ownerWarehouseId: dto.ownerWarehouseId,
+        hasDocuments: dto.hasDocuments,
+        conditionNote: dto.conditionNote,
+      };
+    }
+
+    if (category === 'CARD') {
+      if (!dto.cardKind) {
+        throw new BadRequestException('Укажите тип карты');
+      }
+      if (dto.condition && dto.condition !== 'OK') {
+        throw new BadRequestException('У карт нет состояний');
+      }
+      const cardNumber = this.requireCardNumber(dto.cardKind, dto.cardNumber);
+      if (dto.cardKind === 'TRANSPONDER' && (!dto.name?.trim() || dto.name.trim().length < 2)) {
+        throw new BadRequestException('Укажите наименование транспондера');
+      }
+      const name = defaultCardName(dto.cardKind, cardNumber, dto.name);
+      return {
+        category,
+        name,
+        type: 'SERIAL' as const,
+        factoryNumber: cardNumber,
+        quantity: 1,
+        condition: 'OK' as const,
+        plateNumber: null as string | null,
+        vehicleKind: null,
+        cardKind: dto.cardKind,
+        cardNumber,
+        ownerType: dto.ownerType,
+        ownerUserId: dto.ownerUserId,
+        ownerWarehouseId: dto.ownerWarehouseId,
+        hasDocuments: false,
+        conditionNote: undefined as string | undefined,
+      };
+    }
+
+    if (!dto.type) {
+      throw new BadRequestException('Укажите тип оборудования');
+    }
+    if (!dto.name?.trim() || dto.name.trim().length < 2) {
+      throw new BadRequestException('Укажите наименование');
+    }
+    if (!dto.condition) {
+      throw new BadRequestException('Укажите состояние');
+    }
     if (dto.type === 'SERIAL') {
       if (!dto.factoryNumber?.trim()) {
         throw new BadRequestException(
@@ -328,25 +436,49 @@ export class EquipmentService {
         );
       }
       return {
-        ...dto,
+        category: 'EQUIPMENT' as const,
+        name: dto.name.trim(),
+        type: dto.type,
         factoryNumber: dto.factoryNumber.trim(),
         quantity: 1,
+        condition: dto.condition,
+        plateNumber: null as string | null,
+        vehicleKind: null,
+        cardKind: null as CardKind | null,
+        cardNumber: null as string | null,
+        ownerType: dto.ownerType,
+        ownerUserId: dto.ownerUserId,
+        ownerWarehouseId: dto.ownerWarehouseId,
+        hasDocuments: dto.hasDocuments,
+        conditionNote: dto.conditionNote,
       };
     }
     return {
-      ...dto,
+      category: 'EQUIPMENT' as const,
+      name: dto.name.trim(),
+      type: dto.type,
       factoryNumber: null as string | null,
       quantity: dto.quantity && dto.quantity > 0 ? dto.quantity : 1,
+      condition: dto.condition,
+      plateNumber: null as string | null,
+      vehicleKind: null,
+      cardKind: null as CardKind | null,
+      cardNumber: null as string | null,
+      ownerType: dto.ownerType,
+      ownerUserId: dto.ownerUserId,
+      ownerWarehouseId: dto.ownerWarehouseId,
+      hasDocuments: dto.hasDocuments,
+      conditionNote: dto.conditionNote,
     };
   }
 
   async create(dto: CreateEquipmentDto, user: AuthUser) {
     this.assertCanCreateFor(user, dto);
     const data = this.normalizeCreate(dto);
-    const conditionNote = this.normalizeConditionNote(
-      data.condition,
-      dto.conditionNote,
-    );
+    const conditionNote =
+      data.category === 'CARD'
+        ? null
+        : this.normalizeConditionNote(data.condition, dto.conditionNote);
 
     let ownerType = data.ownerType;
     let ownerUserId = data.ownerUserId ?? null;
@@ -366,7 +498,7 @@ export class EquipmentService {
       throw new BadRequestException('Укажите производственную базу');
     }
 
-    if (data.type === EquipmentType.CONSUMABLE) {
+    if (data.type === EquipmentType.CONSUMABLE && data.category === 'EQUIPMENT') {
       const existing = await this.findConsumableLot(
         data.name.trim(),
         data.condition,
@@ -389,23 +521,38 @@ export class EquipmentService {
       }
     }
 
-    const item = await this.prisma.equipment.create({
-      data: {
-        name: data.name.trim(),
-        type: data.type,
-        factoryNumber: data.factoryNumber,
-        quantity: data.quantity,
-        condition: data.condition,
-        conditionNote,
-        hasDocuments: Boolean(dto.hasDocuments),
-        ownerType,
-        ownerUserId: ownerType === 'USER' ? ownerUserId : null,
-        ownerWarehouseId: ownerType === 'WAREHOUSE' ? ownerWarehouseId : null,
-      },
-      include: includeOwner,
-    });
-    this.excel.scheduleSync();
-    return item;
+    try {
+      const item = await this.prisma.equipment.create({
+        data: {
+          name: data.name.trim(),
+          type: data.type,
+          factoryNumber: data.factoryNumber,
+          quantity: data.quantity,
+          condition: data.condition,
+          conditionNote,
+          hasDocuments: Boolean(data.hasDocuments),
+          category: data.category,
+          plateNumber: data.plateNumber,
+          vehicleKind: data.vehicleKind,
+          cardKind: data.cardKind,
+          cardNumber: data.cardNumber,
+          ownerType,
+          ownerUserId: ownerType === 'USER' ? ownerUserId : null,
+          ownerWarehouseId: ownerType === 'WAREHOUSE' ? ownerWarehouseId : null,
+        },
+        include: includeOwner,
+      });
+      this.excel.scheduleSync();
+      return item;
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new BadRequestException('Такой госномер уже есть в учёте');
+      }
+      throw e;
+    }
   }
 
   async update(id: string, dto: UpdateEquipmentDto, user: AuthUser) {
@@ -424,10 +571,18 @@ export class EquipmentService {
       dto.name !== undefined ||
       dto.type !== undefined ||
       dto.factoryNumber !== undefined ||
-      dto.quantity !== undefined;
+      dto.quantity !== undefined ||
+      dto.plateNumber !== undefined ||
+      dto.vehicleKind !== undefined ||
+      dto.cardKind !== undefined ||
+      dto.cardNumber !== undefined;
     const wantsCondition =
       dto.condition !== undefined || dto.conditionNote !== undefined;
     const wantsDocs = dto.hasDocuments !== undefined;
+
+    if (item.category === 'CARD' && wantsCondition) {
+      throw new BadRequestException('У карт нет состояний');
+    }
 
     if (wantsCard && !canEditCard) {
       throw new ForbiddenException('Нет права редактировать карточку');
@@ -451,11 +606,17 @@ export class EquipmentService {
       return item;
     }
 
+    if (item.category === 'VEHICLE' || item.category === 'CARD') {
+      if (dto.type !== undefined && dto.type !== 'SERIAL') {
+        throw new BadRequestException('Тип нельзя менять для этой категории');
+      }
+    }
+
     const nextType = dto.type ?? item.type;
     if (dto.type !== undefined && dto.type !== item.type && !canEditCard) {
       throw new ForbiddenException('Нет права менять тип оборудования');
     }
-    if (nextType === 'SERIAL') {
+    if (item.category === 'EQUIPMENT' && nextType === 'SERIAL') {
       const factoryNumber =
         dto.factoryNumber !== undefined
           ? dto.factoryNumber.trim()
@@ -469,10 +630,53 @@ export class EquipmentService {
         throw new BadRequestException('Серийная единица всегда 1 шт.');
       }
     }
-    if (nextType === 'CONSUMABLE' && dto.factoryNumber?.trim()) {
+    if (item.category === 'EQUIPMENT' && nextType === 'CONSUMABLE' && dto.factoryNumber?.trim()) {
       throw new BadRequestException(
         'У неномерного оборудования нет заводского номера',
       );
+    }
+
+    let nextPlate = item.plateNumber;
+    let nextVehicleKind = item.vehicleKind;
+    let nextCardKind = item.cardKind;
+    let nextCardNumber = item.cardNumber;
+    let nextFactory = item.factoryNumber;
+    let nextName = dto.name?.trim();
+
+    if (item.category === 'VEHICLE' && canEditCard) {
+      if (dto.plateNumber !== undefined) {
+        nextPlate = this.requirePlate(dto.plateNumber);
+        nextFactory = nextPlate;
+      }
+      if (dto.vehicleKind !== undefined) {
+        nextVehicleKind = dto.vehicleKind;
+      }
+    }
+    if (item.category === 'CARD' && canEditCard) {
+      const kind = dto.cardKind ?? item.cardKind;
+      if (!kind) {
+        throw new BadRequestException('Укажите тип карты');
+      }
+      if (dto.cardKind !== undefined) {
+        nextCardKind = dto.cardKind;
+      }
+      if (dto.cardNumber !== undefined || dto.cardKind !== undefined) {
+        nextCardNumber = this.requireCardNumber(
+          kind,
+          dto.cardNumber ?? item.cardNumber ?? '',
+        );
+        nextFactory = nextCardNumber;
+      }
+      if (nextName === undefined && (dto.cardNumber !== undefined || dto.cardKind !== undefined)) {
+        nextName = defaultCardName(
+          nextCardKind!,
+          nextCardNumber!,
+          item.name,
+        );
+      }
+      if (kind === 'TRANSPONDER' && nextName !== undefined && nextName.length < 2) {
+        throw new BadRequestException('Укажите наименование транспондера');
+      }
     }
 
     const nextCondition = dto.condition ?? item.condition;
@@ -507,59 +711,91 @@ export class EquipmentService {
         (wantsCard || wantsDocs),
     );
 
-    const resultId = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.equipment.update({
-        where: { id },
-        data: {
-          name: canEditCard ? dto.name?.trim() : undefined,
-          type: canEditCard && dto.type !== undefined ? nextType : undefined,
-          factoryNumber: !canEditCard
-            ? undefined
-            : nextType === 'SERIAL'
-              ? (dto.factoryNumber !== undefined
-                  ? dto.factoryNumber.trim() || null
-                  : undefined)
-              : null,
-          quantity: !canEditCard
-            ? undefined
-            : nextType === 'SERIAL'
-              ? 1
-              : dto.quantity !== undefined
-                ? dto.quantity
+    try {
+      const resultId = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.equipment.update({
+          where: { id },
+          data: {
+            name: canEditCard ? nextName : undefined,
+            type:
+              canEditCard &&
+              item.category === 'EQUIPMENT' &&
+              dto.type !== undefined
+                ? nextType
                 : undefined,
-          condition: wantsCondition ? nextCondition : undefined,
-          conditionNote,
-          hasDocuments: wantsDocs ? dto.hasDocuments : undefined,
-          ...(markPendingReview
-            ? {
-                fillStatus: 'PENDING_REVIEW' as const,
-                fillComment: null,
-              }
-            : {}),
-        },
+            factoryNumber: !canEditCard
+              ? undefined
+              : item.category === 'VEHICLE'
+                ? nextPlate
+                : item.category === 'CARD'
+                  ? nextCardNumber
+                  : nextType === 'SERIAL'
+                    ? dto.factoryNumber !== undefined
+                      ? dto.factoryNumber.trim() || null
+                      : undefined
+                    : null,
+            quantity: !canEditCard
+              ? undefined
+              : item.category !== 'EQUIPMENT' || nextType === 'SERIAL'
+                ? 1
+                : dto.quantity !== undefined
+                  ? dto.quantity
+                  : undefined,
+            plateNumber:
+              canEditCard && item.category === 'VEHICLE' ? nextPlate : undefined,
+            vehicleKind:
+              canEditCard && item.category === 'VEHICLE'
+                ? nextVehicleKind
+                : undefined,
+            cardKind:
+              canEditCard && item.category === 'CARD' ? nextCardKind : undefined,
+            cardNumber:
+              canEditCard && item.category === 'CARD'
+                ? nextCardNumber
+                : undefined,
+            condition: wantsCondition ? nextCondition : undefined,
+            conditionNote,
+            hasDocuments:
+              wantsDocs && item.category !== 'CARD' ? dto.hasDocuments : undefined,
+            ...(markPendingReview
+              ? {
+                  fillStatus: 'PENDING_REVIEW' as const,
+                  fillComment: null,
+                }
+              : {}),
+          },
+        });
+
+        if (wantsCondition && nextCondition === 'IN_REPAIR') {
+          const repair = await this.ensureRepairWarehouseTx(tx);
+          if (updated.ownerWarehouseId !== repair.id) {
+            return this.transferInTx(
+              tx,
+              updated.id,
+              {
+                toOwnerType: 'WAREHOUSE',
+                toWarehouseId: repair.id,
+              },
+              user,
+              { systemRepairMove: true },
+            );
+          }
+        }
+
+        return updated.id;
       });
 
-      if (wantsCondition && nextCondition === 'IN_REPAIR') {
-        const repair = await this.ensureRepairWarehouseTx(tx);
-        if (updated.ownerWarehouseId !== repair.id) {
-          return this.transferInTx(
-            tx,
-            updated.id,
-            {
-              toOwnerType: 'WAREHOUSE',
-              toWarehouseId: repair.id,
-            },
-            user,
-            { systemRepairMove: true },
-          );
-        }
+      this.excel.scheduleSync();
+      return this.get(resultId, user);
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new BadRequestException('Такой госномер уже есть в учёте');
       }
-
-      return updated.id;
-    });
-
-    this.excel.scheduleSync();
-    return this.get(resultId, user);
+      throw e;
+    }
   }
 
   async remove(id: string, user: AuthUser) {
@@ -716,7 +952,7 @@ export class EquipmentService {
     if (item.ownerType === 'USER' && item.ownerUserId) {
       void this.notify.notifyFillRemark({
         ownerUserId: item.ownerUserId,
-        equipmentName: item.name,
+        equipmentName: assetDisplayName(item),
       });
     }
 
@@ -825,7 +1061,7 @@ export class EquipmentService {
     const pending = await tx.transfer.create({
       data: {
         equipmentId: item.id,
-        equipmentName: item.name,
+        equipmentName: assetDisplayName(item),
         factoryNumber: item.factoryNumber,
         quantity: qty,
         status: 'PENDING',
@@ -1031,6 +1267,7 @@ export class EquipmentService {
           data: {
             name: item.name,
             type: 'CONSUMABLE',
+            category: 'EQUIPMENT',
             factoryNumber: null,
             quantity: qty,
             condition: item.condition,
@@ -1058,8 +1295,8 @@ export class EquipmentService {
       await tx.transfer.create({
         data: {
           equipmentId: remainingId,
-          equipmentName: item.name,
-          factoryNumber: item.factoryNumber,
+        equipmentName: assetDisplayName(item),
+        factoryNumber: item.factoryNumber || item.plateNumber || item.cardNumber,
           quantity: qty,
           status: 'COMPLETED',
           fromOwnerType: item.ownerType,
@@ -1139,6 +1376,7 @@ export class EquipmentService {
   ) {
     return this.prisma.equipment.findFirst({
       where: {
+        category: 'EQUIPMENT',
         type: 'CONSUMABLE',
         name,
         condition,
@@ -1160,6 +1398,7 @@ export class EquipmentService {
   ) {
     return tx.equipment.findFirst({
       where: {
+        category: 'EQUIPMENT',
         type: 'CONSUMABLE',
         name,
         condition,

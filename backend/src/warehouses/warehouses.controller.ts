@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { WarehousesService } from './warehouses.service';
@@ -27,8 +28,12 @@ export class WarehousesController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.warehouses.get(id, user);
+  get(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Query('category') category?: string,
+  ) {
+    return this.warehouses.get(id, user, category);
   }
 
   @Post()

@@ -14,10 +14,10 @@
             />
           </th>
           <th class="eq-col-name">Наименование</th>
-          <th class="eq-col-serial">Заводской номер</th>
-          <th class="eq-col-qty">Кол-во</th>
-          <th class="eq-col-docs" title="Паспорта и сертификаты">Пасп.</th>
-          <th class="eq-col-condition">Состояние</th>
+          <th class="eq-col-serial">{{ identityColumnTitle(category) }}</th>
+          <th v-if="category === 'EQUIPMENT'" class="eq-col-qty">Кол-во</th>
+          <th v-if="category === 'EQUIPMENT'" class="eq-col-docs" title="Паспорта и сертификаты">Пасп.</th>
+          <th v-if="category !== 'CARD'" class="eq-col-condition">Состояние</th>
           <th class="eq-col-owner">{{ showRepairSender ? 'Кто отправил' : 'Владелец' }}</th>
           <th class="eq-col-actions"></th>
         </tr>
@@ -54,11 +54,11 @@
               <div v-if="item.fillComment" class="eq-fill__comment">{{ item.fillComment }}</div>
             </div>
           </td>
-          <td class="eq-col-serial mono" :title="item.factoryNumber || undefined">
-            {{ item.factoryNumber || '—' }}
+          <td class="eq-col-serial mono" :title="identityLabel(item)">
+            {{ identityLabel(item) }}
           </td>
-          <td class="eq-col-qty">{{ item.quantity }}</td>
-          <td class="eq-col-docs">
+          <td v-if="category === 'EQUIPMENT'" class="eq-col-qty">{{ item.quantity }}</td>
+          <td v-if="category === 'EQUIPMENT'" class="eq-col-docs">
             <input
               :key="`${item.id}-docs-${docsNonce}`"
               class="checkbox"
@@ -71,7 +71,7 @@
               @change="$emit('documents-change', { item, hasDocuments: $event.target.checked })"
             />
           </td>
-          <td class="eq-col-condition">
+          <td v-if="category !== 'CARD'" class="eq-col-condition">
             <ConditionSelect
               v-if="canChange(item)"
               :key="`${item.id}-${item.condition}-${conditionNonce}`"
@@ -156,6 +156,8 @@ import IconActions from '../ui/IconActions.vue';
 import { useAuthStore } from '../../stores/auth';
 import {
   FILL_STATUS_LABEL,
+  identityColumnTitle,
+  identityLabel,
   ownerLabel,
   pendingOfferLabel,
   repairSenderLabel,
@@ -178,6 +180,7 @@ import {
 
 defineProps({
   items: { type: Array, default: () => [] },
+  category: { type: String, default: 'EQUIPMENT' },
   selectable: { type: Boolean, default: false },
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },

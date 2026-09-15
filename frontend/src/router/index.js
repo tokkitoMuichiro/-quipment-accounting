@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
+const assetList = () => import('../views/EquipmentListView.vue');
+const peopleList = () => import('../views/PeopleEquipmentView.vue');
+
 const routes = [
   {
     path: '/login',
@@ -16,19 +19,71 @@ const routes = [
       {
         path: 'mine',
         name: 'mine',
-        component: () => import('../views/EquipmentListView.vue'),
-        meta: { scope: 'mine', title: 'Моё оборудование' },
+        component: assetList,
+        meta: { scope: 'mine', category: 'equipment', title: 'Моё оборудование' },
+      },
+      {
+        path: 'mine/vehicles',
+        name: 'mine-vehicles',
+        component: assetList,
+        meta: { scope: 'mine', category: 'vehicles', title: 'Мой транспорт' },
+      },
+      {
+        path: 'mine/cards',
+        name: 'mine-cards',
+        component: assetList,
+        meta: { scope: 'mine', category: 'cards', title: 'Мои карты' },
       },
       {
         path: 'people',
         name: 'people',
-        component: () => import('../views/PeopleEquipmentView.vue'),
+        component: peopleList,
+        meta: { category: 'equipment', title: 'Оборудование у сотрудников' },
+      },
+      {
+        path: 'people/vehicles',
+        name: 'people-vehicles',
+        component: peopleList,
+        meta: { category: 'vehicles', title: 'Транспорт у сотрудников' },
+      },
+      {
+        path: 'people/cards',
+        name: 'people-cards',
+        component: peopleList,
+        meta: { category: 'cards', title: 'Карты у сотрудников' },
       },
       {
         path: 'fleet',
         name: 'fleet',
-        component: () => import('../views/EquipmentListView.vue'),
-        meta: { scope: 'all', title: 'Всё оборудование', perm: 'view_all' },
+        component: assetList,
+        meta: {
+          scope: 'all',
+          category: 'equipment',
+          title: 'Всё оборудование',
+          perm: 'view_all',
+        },
+      },
+      {
+        path: 'fleet/vehicles',
+        name: 'fleet-vehicles',
+        component: assetList,
+        meta: {
+          scope: 'all',
+          category: 'vehicles',
+          title: 'Весь транспорт',
+          perm: 'view_all',
+        },
+      },
+      {
+        path: 'fleet/cards',
+        name: 'fleet-cards',
+        component: assetList,
+        meta: {
+          scope: 'all',
+          category: 'cards',
+          title: 'Все карты',
+          perm: 'view_all',
+        },
       },
       {
         path: 'warehouses',

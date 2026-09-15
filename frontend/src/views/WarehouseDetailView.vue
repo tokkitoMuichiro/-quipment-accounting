@@ -2,20 +2,30 @@
   <section>
     <PageHeader
       :title="warehouse?.name || 'Производственная база'"
-      :subtitle="isRepairWarehouse ? 'Кто отправил оборудование в ремонт' : (warehouse?.address || 'Оборудование на этой базе')"
+      :subtitle="warehouseSubtitle"
     >
       <template #actions>
         <router-link class="btn btn--ghost" to="/warehouses">Назад</router-link>
-        <button v-if="canStock" class="btn btn--accent" @click="showForm = true">
+        <button v-if="canStock" class="btn btn--accent" @click="openCreate">
           Внести на базу
         </button>
       </template>
     </PageHeader>
+
+    <div class="filters">
+      <select v-model="categoryFilter" aria-label="Категория">
+        <option value="EQUIPMENT">Оборудование</option>
+        <option value="VEHICLE">Транспорт</option>
+        <option value="CARD">Карты</option>
+      </select>
+    </div>
+
     <p v-if="error" class="alert">{{ error }}</p>
     <p v-if="loading" class="muted">Загрузка…</p>
     <EquipmentBoard
       v-if="!loading"
       :items="items"
+      :category="categoryFilter"
       :selectable="canSelect"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -34,9 +44,15 @@
       @clear="clear"
       @transfer="openTransfer(selectedItems)"
     />
+    <AssetTypePicker
+      v-if="showPicker"
+      @close="showPicker = false"
+      @pick="onPickCategory"
+    />
     <EquipmentForm
       v-if="showForm || editItem"
       :item="editItem"
+      :category="createCategory"
       default-owner-type="WAREHOUSE"
       :default-warehouse-id="id"
       @close="closeForm"
@@ -62,20 +78,29 @@ import PageHeader from '../components/ui/PageHeader.vue';
 import SelectionBar from '../components/ui/SelectionBar.vue';
 import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
 import EquipmentForm from '../components/equipment/EquipmentForm.vue';
+import AssetTypePicker from '../components/equipment/AssetTypePicker.vue';
 import TransferModal from '../components/equipment/TransferModal.vue';
 import { canTransferItem, canStockWarehouse } from '../utils/access';
+import { categoryQueryParam } from '../utils/format';
 
 const route = useRoute();
 const auth = useAuthStore();
 const warehouse = ref(null);
 const error = ref('');
 const loading = ref(false);
+const showPicker = ref(false);
 const showForm = ref(false);
 const editItem = ref(null);
 const transferItems = ref([]);
+const categoryFilter = ref('EQUIPMENT');
+const createCategory = ref('EQUIPMENT');
 const id = computed(() => route.params.id);
 const items = computed(() => warehouse.value?.equipment || []);
 const isRepairWarehouse = computed(() => warehouse.value?.slug === 'repair');
+const warehouseSubtitle = computed(() => {
+  if (isRepairWarehouse.value) return 'Кто отправил в ремонт';
+  return warehouse.value?.address || 'Позиции на этой базе';
+});
 const {
   selectedItems,
   allSelected,
@@ -95,13 +120,27 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    warehouse.value = await fetchWarehouse(id.value);
+    warehouse.value = await fetchWarehouse(
+      id.value,
+      categoryQueryParam(categoryFilter.value),
+    );
   } catch (e) {
     warehouse.value = null;
     error.value = e.message;
   } finally {
     loading.value = false;
   }
+}
+
+function openCreate() {
+  editItem.value = null;
+  showPicker.value = true;
+}
+
+function onPickCategory(cat) {
+  createCategory.value = cat;
+  showPicker.value = false;
+  showForm.value = true;
 }
 
 function closeForm() {
@@ -131,11 +170,14 @@ async function removeItem(item) {
 }
 
 watch(editItem, (v) => {
-  if (v) showForm.value = true;
+  if (v) {
+    createCategory.value = v.category || 'EQUIPMENT';
+    showForm.value = true;
+  }
 });
 
 watch(
-  id,
+  [id, categoryFilter],
   () => {
     clear();
     load();

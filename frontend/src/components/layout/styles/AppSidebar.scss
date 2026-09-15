@@ -43,6 +43,58 @@
   text-transform: uppercase;
 }
 
+.nav__block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav__parent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: $radius;
+  color: $color-lavender;
+  font-size: $font-size-md;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nav__parent:hover {
+  background: $color-midnight-soft;
+  color: $color-white;
+}
+
+.nav__chevron {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  opacity: 0.7;
+}
+
+.nav__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.nav__sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 8px;
+}
+
+.nav__sub a {
+  font-size: $font-size-sm;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+}
+
 .nav a.router-link-active,
 .nav a:hover {
   background: $color-midnight-soft;

@@ -34,8 +34,9 @@ export class EquipmentController {
     @Query('scope') scope?: string,
     @Query('warehouseId') warehouseId?: string,
     @Query('ownerUserId') ownerUserId?: string,
+    @Query('category') category?: string,
   ) {
-    return this.equipment.list(user, scope, warehouseId, ownerUserId);
+    return this.equipment.list(user, scope, warehouseId, ownerUserId, category);
   }
 
   @Get('alerts')

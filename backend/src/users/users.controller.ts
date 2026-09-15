@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { IsString } from 'class-validator';
@@ -25,8 +26,11 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.users.list(user);
+  list(
+    @CurrentUser() user: AuthUser,
+    @Query('category') category?: string,
+  ) {
+    return this.users.list(user, category);
   }
 
   @Patch(':id/role')

@@ -6,8 +6,8 @@
       </template>
     </PageHeader>
     <div class="filters">
-      <input v-model="query" placeholder="Поиск по названию или номеру" />
-      <select v-model="condition">
+      <input v-model="query" :placeholder="searchPlaceholder" />
+      <select v-if="category !== 'CARD'" v-model="condition">
         <option value="">Все состояния</option>
         <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
           {{ opt.label }}
@@ -19,6 +19,7 @@
     <EquipmentBoard
       v-if="!loading"
       :items="filtered"
+      :category="category"
       :selectable="canSelect"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -36,9 +37,15 @@
       @clear="clear"
       @transfer="openTransfer(selectedItems)"
     />
+    <AssetTypePicker
+      v-if="showPicker"
+      @close="showPicker = false"
+      @pick="onPickCategory"
+    />
     <EquipmentForm
       v-if="showForm"
       :item="editItem"
+      :category="createCategory"
       @close="closeForm"
       @saved="onSaved"
     />
@@ -60,12 +67,14 @@ import PageHeader from '../components/ui/PageHeader.vue';
 import SelectionBar from '../components/ui/SelectionBar.vue';
 import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
 import EquipmentForm from '../components/equipment/EquipmentForm.vue';
+import AssetTypePicker from '../components/equipment/AssetTypePicker.vue';
 import TransferModal from '../components/equipment/TransferModal.vue';
 import { canTransferItem } from '../utils/access';
-import { CONDITION_OPTIONS } from '../utils/format';
+import { CONDITION_OPTIONS, categoryFromRoute } from '../utils/format';
 
 const route = useRoute();
 const scope = computed(() => route.meta.scope || 'mine');
+const category = computed(() => categoryFromRoute(route.meta.category));
 const {
   auth,
   filtered,
@@ -75,7 +84,7 @@ const {
   loading,
   load,
   removeItem,
-} = useEquipmentList({ scopeRef: scope });
+} = useEquipmentList({ scopeRef: scope, categoryRef: category });
 
 const {
   selectedItems,
@@ -87,11 +96,18 @@ const {
   clear,
   selectedIds,
 } = useSelection(filtered, (item) => canTransferItem(auth, item));
+const showPicker = ref(false);
 const showForm = ref(false);
 const editItem = ref(null);
+const createCategory = ref('EQUIPMENT');
 const transferItems = ref([]);
 
 const title = computed(() => route.meta.title || 'Оборудование');
+const searchPlaceholder = computed(() => {
+  if (category.value === 'VEHICLE') return 'Поиск по названию или госномеру';
+  if (category.value === 'CARD') return 'Поиск по названию или номеру';
+  return 'Поиск по названию или номеру';
+});
 const canSelect = computed(() => filtered.value.some((item) => canTransferItem(auth, item)));
 const canTransferSelected = computed(
   () => selectedItems.value.length > 0 && selectedItems.value.every((item) => canTransferItem(auth, item)),
@@ -99,6 +115,12 @@ const canTransferSelected = computed(
 
 function openCreate() {
   editItem.value = null;
+  showPicker.value = true;
+}
+
+function onPickCategory(cat) {
+  createCategory.value = cat;
+  showPicker.value = false;
   showForm.value = true;
 }
 
@@ -119,7 +141,10 @@ function onSaved() {
 }
 
 watch(editItem, (v) => {
-  if (v) showForm.value = true;
+  if (v) {
+    createCategory.value = v.category || 'EQUIPMENT';
+    showForm.value = true;
+  }
 });
 
 watch(filtered, () => {

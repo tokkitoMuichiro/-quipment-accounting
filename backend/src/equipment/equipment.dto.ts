@@ -12,17 +12,38 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { EquipmentCondition, EquipmentType, OwnerType } from '@prisma/client';
+import {
+  AssetCategory,
+  CardKind,
+  EquipmentCondition,
+  EquipmentType,
+  OwnerType,
+  VehicleKind,
+} from '@prisma/client';
 
 export class CreateEquipmentDto {
+  @IsOptional()
+  @IsEnum(AssetCategory)
+  category?: AssetCategory;
+
+  @ValidateIf(
+    (o) =>
+      (o.category || 'EQUIPMENT') !== 'CARD' ||
+      o.cardKind === 'TRANSPONDER' ||
+      (o.name != null && String(o.name).trim() !== ''),
+  )
   @IsString()
   @MinLength(2)
-  name: string;
+  name?: string;
 
+  @ValidateIf((o) => (o.category || 'EQUIPMENT') === 'EQUIPMENT')
   @IsEnum(EquipmentType)
-  type: EquipmentType;
+  type?: EquipmentType;
 
-  @ValidateIf((o) => o.type === 'SERIAL')
+  @ValidateIf(
+    (o) =>
+      (o.category || 'EQUIPMENT') === 'EQUIPMENT' && o.type === 'SERIAL',
+  )
   @IsString()
   @MinLength(1)
   factoryNumber?: string;
@@ -32,8 +53,9 @@ export class CreateEquipmentDto {
   @Min(1)
   quantity?: number;
 
+  @ValidateIf((o) => (o.category || 'EQUIPMENT') !== 'CARD')
   @IsEnum(EquipmentCondition)
-  condition: EquipmentCondition;
+  condition?: EquipmentCondition;
 
   @IsOptional()
   @IsString()
@@ -43,6 +65,25 @@ export class CreateEquipmentDto {
   @IsOptional()
   @IsBoolean()
   hasDocuments?: boolean;
+
+  @ValidateIf((o) => (o.category || 'EQUIPMENT') === 'VEHICLE')
+  @IsString()
+  @MinLength(5)
+  plateNumber?: string;
+
+  @ValidateIf((o) => (o.category || 'EQUIPMENT') === 'VEHICLE')
+  @IsEnum(VehicleKind)
+  vehicleKind?: VehicleKind;
+
+  @ValidateIf((o) => (o.category || 'EQUIPMENT') === 'CARD')
+  @IsEnum(CardKind)
+  cardKind?: CardKind;
+
+  @ValidateIf((o) => (o.category || 'EQUIPMENT') === 'CARD')
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  cardNumber?: string;
 
   @IsEnum(OwnerType)
   ownerType: OwnerType;
@@ -87,6 +128,25 @@ export class UpdateEquipmentDto {
   @IsOptional()
   @IsBoolean()
   hasDocuments?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(5)
+  plateNumber?: string;
+
+  @IsOptional()
+  @IsEnum(VehicleKind)
+  vehicleKind?: VehicleKind;
+
+  @IsOptional()
+  @IsEnum(CardKind)
+  cardKind?: CardKind;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  cardNumber?: string;
 }
 
 export class TransferEquipmentDto {

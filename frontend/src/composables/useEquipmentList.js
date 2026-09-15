@@ -1,8 +1,9 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
+import { categoryQueryParam, searchBlob } from '../utils/format';
 
-export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
+export function useEquipmentList({ scopeRef, warehouseIdRef, categoryRef } = {}) {
   const auth = useAuthStore();
   const items = ref([]);
   const query = ref('');
@@ -12,10 +13,11 @@ export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
 
   const filtered = computed(() => {
     const q = query.value.trim().toLowerCase();
+    const isCard = categoryRef?.value === 'CARD';
     return items.value.filter((item) => {
-      const text = `${item.name} ${item.factoryNumber || ''}`.toLowerCase();
-      const okQuery = !q || text.includes(q);
-      const okCond = !condition.value || item.condition === condition.value;
+      const okQuery = !q || searchBlob(item).includes(q);
+      const okCond =
+        isCard || !condition.value || item.condition === condition.value;
       return okQuery && okCond;
     });
   });
@@ -27,8 +29,11 @@ export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
       const params = new URLSearchParams();
       if (scopeRef?.value === 'mine') params.set('scope', 'mine');
       if (warehouseIdRef?.value) params.set('warehouseId', warehouseIdRef.value);
-      const qs = params.toString();
-      items.value = await fetchEquipment(qs ? `?${qs}` : '');
+      params.set(
+        'category',
+        categoryQueryParam(categoryRef?.value || 'EQUIPMENT'),
+      );
+      items.value = await fetchEquipment(`?${params.toString()}`);
     } catch (e) {
       error.value = e.message;
     } finally {
@@ -47,6 +52,7 @@ export function useEquipmentList({ scopeRef, warehouseIdRef } = {}) {
   }
 
   if (scopeRef) watch(scopeRef, load);
+  if (categoryRef) watch(categoryRef, load);
   onMounted(load);
 
   return {
