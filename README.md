@@ -138,4 +138,15 @@ docker compose up -d --build
 
 ---
 
+## CI/CD и релизы
+
+- **CI** (GitHub Actions): на PR и push в `master` — Jest/API-тесты, сборка backend и frontend.
+- **CD**: push тега `v*` (например `v1.2.0`) → сборка образов в **GHCR** → деплой на VDS (бэкап Postgres, `docker compose pull`, `up -d`).
+- На сервере prod использует [`docker-compose.prod.yml`](docker-compose.prod.yml) с образами из GHCR; локально — обычный [`docker-compose.yml`](docker-compose.yml) с `build:`.
+- Секреты (`SSH_*`, Bitrix, `JWT_SECRET`) и пошаговая настройка GHCR/SSH — в личной инструкции `dev.local.cicd.md` (не в репозитории).
+
+Ритуал релиза: зелёный CI на `master` → `git tag vX.Y.Z` → `git push origin master --tags`.
+
+---
+
 Сделано для повседневной работы на площадке, а не «ради Excel». Если что-то в учёте расходится с таблицей — верьте приложению.
