@@ -24,4 +24,23 @@ describe('plate-number', () => {
     expect(normalizePlateNumber('а123вс77')).toBe('A123BC77');
     expect(assertPlateNumber('А123ВС777')).toBe('A123BC777');
   });
+
+  it('accepts trailer plates: two letters, four digits, region', () => {
+    expect(isValidPlateNumber('AA1234 199', 'TRAILER')).toBe(true);
+    expect(isValidPlateNumber('АА1234199', 'TRAILER')).toBe(true);
+    expect(isValidPlateNumber('ак 1234 7', 'TRAILER')).toBe(true);
+    expect(assertPlateNumber('АА1234 199', 'TRAILER')).toBe('AA1234199');
+  });
+
+  it('rejects trailer plates in the wrong shape', () => {
+    expect(isValidPlateNumber('A123BC77', 'TRAILER')).toBe(false);
+    expect(isValidPlateNumber('AA1234', 'TRAILER')).toBe(false);
+    expect(isValidPlateNumber('AA1234 1999', 'TRAILER')).toBe(false);
+    expect(isValidPlateNumber('A1234 199', 'TRAILER')).toBe(false);
+  });
+
+  it('keeps the car shape invalid for trailers and vice versa', () => {
+    expect(isValidPlateNumber('AA1234199')).toBe(false);
+    expect(isValidPlateNumber('A123BC77', 'PASSENGER')).toBe(true);
+  });
 });

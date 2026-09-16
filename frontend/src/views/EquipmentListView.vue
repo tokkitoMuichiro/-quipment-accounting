@@ -7,12 +7,45 @@
     </PageHeader>
     <div class="filters">
       <input v-model="query" :placeholder="searchPlaceholder" />
-      <select v-if="category !== 'CARD'" v-model="condition">
+      <select v-if="category === 'EQUIPMENT'" v-model="condition" aria-label="Состояние">
         <option value="">Все состояния</option>
         <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
           {{ opt.label }}
         </option>
       </select>
+      <FilterMenu
+        v-else
+        :count="activeFilterCount"
+        @reset="resetFilters"
+      >
+        <label v-if="category === 'VEHICLE'">
+          Вид транспорта
+          <select v-model="vehicleKind">
+            <option value="">Любой</option>
+            <option v-for="opt in VEHICLE_KIND_OPTIONS" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+        <label v-if="category === 'VEHICLE'">
+          Состояние
+          <select v-model="condition">
+            <option value="">Любое</option>
+            <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+        <label v-if="category === 'CARD'">
+          Тип карты
+          <select v-model="cardKind">
+            <option value="">Любой</option>
+            <option v-for="opt in CARD_KIND_OPTIONS" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+      </FilterMenu>
     </div>
     <p v-if="error" class="alert">{{ error }}</p>
     <p v-if="loading" class="muted">Загрузка…</p>
@@ -20,6 +53,7 @@
       v-if="!loading"
       :items="filtered"
       :category="category"
+      :empty-text="emptyText"
       :selectable="canSelect"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -69,8 +103,14 @@ import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
 import EquipmentForm from '../components/equipment/EquipmentForm.vue';
 import AssetTypePicker from '../components/equipment/AssetTypePicker.vue';
 import TransferModal from '../components/equipment/TransferModal.vue';
+import FilterMenu from '../components/equipment/FilterMenu.vue';
 import { canTransferItem } from '../utils/access';
-import { CONDITION_OPTIONS, categoryFromRoute } from '../utils/format';
+import {
+  CARD_KIND_OPTIONS,
+  CONDITION_OPTIONS,
+  VEHICLE_KIND_OPTIONS,
+  categoryFromRoute,
+} from '../utils/format';
 
 const route = useRoute();
 const scope = computed(() => route.meta.scope || 'mine');
@@ -80,6 +120,11 @@ const {
   filtered,
   query,
   condition,
+  vehicleKind,
+  cardKind,
+  activeFilterCount,
+  emptyText,
+  resetFilters,
   error,
   loading,
   load,

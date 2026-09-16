@@ -13,6 +13,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { DocumentsService } from './documents.service';
+import { DocumentsSyncService } from './documents-sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -22,7 +23,15 @@ import { DOC_MAX_BYTES, UploadedMemoryFile } from '../bitrix/document.constants'
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DocumentsController {
-  constructor(private readonly documents: DocumentsService) {}
+  constructor(
+    private readonly documents: DocumentsService,
+    private readonly sync: DocumentsSyncService,
+  ) {}
+
+  @Post('documents/sync')
+  syncAll() {
+    return this.sync.syncAll();
+  }
 
   @Get('equipment/:id/documents')
   list(@Param('id') id: string, @CurrentUser() user: AuthUser) {

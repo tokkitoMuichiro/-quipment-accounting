@@ -61,3 +61,7 @@ export function downloadDocument(documentId) {
 export function deleteDocument(documentId) {
   return api(`/documents/${documentId}`, { method: 'DELETE' });
 }
+
+export function syncDocuments() {
+  return api('/documents/sync', { method: 'POST' });
+}

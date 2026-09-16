@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,13 +15,17 @@ import {
   decodeUploadFileName,
 } from '../bitrix/document.constants';
 import { ExcelService } from '../excel/excel.service';
+import { DocumentsSyncService } from './documents-sync.service';
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly disk: DiskService,
     private readonly excel: ExcelService,
+    private readonly sync: DocumentsSyncService,
   ) {}
 
   private assertDocsCategory(category: string) {
@@ -39,6 +44,15 @@ export class DocumentsService {
       throw new NotFoundException('Позиция не найдена');
     }
     this.assertDocsCategory(item.category);
+
+    try {
+      await this.sync.syncEquipment(equipmentId);
+    } catch (error) {
+      this.logger.warn(
+        `Не удалось сверить документы позиции ${equipmentId} с Битрикс`,
+        error as Error,
+      );
+    }
 
     return this.prisma.equipmentDocument.findMany({
       where: { equipmentId },

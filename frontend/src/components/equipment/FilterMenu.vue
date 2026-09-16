@@ -1,0 +1,68 @@
+<template>
+  <div ref="rootEl" class="filter-menu">
+    <button
+      type="button"
+      class="filter-menu__btn"
+      :class="{ 'is-active': count > 0 }"
+      :aria-expanded="open"
+      aria-label="Фильтры"
+      title="Фильтры"
+      @click="open = !open"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88L2.83 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.14.24.42.34.61.22l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.19.12.47.02.61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"
+        />
+      </svg>
+      <span v-if="count" class="filter-menu__count">{{ count }}</span>
+    </button>
+
+    <div v-if="open" class="filter-menu__panel">
+      <slot />
+      <button
+        type="button"
+        class="btn btn--ghost btn--small"
+        :disabled="!count"
+        @click="$emit('reset')"
+      >
+        Сбросить
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import './styles/FilterMenu.scss';
+
+defineProps({
+  count: { type: Number, default: 0 },
+});
+defineEmits(['reset']);
+
+const rootEl = ref(null);
+const open = ref(false);
+
+function onDocumentClick(event) {
+  if (!open.value) return;
+  if (rootEl.value && !rootEl.value.contains(event.target)) {
+    open.value = false;
+  }
+}
+
+function onKeydown(event) {
+  if (event.key === 'Escape') open.value = false;
+}
+
+watch(open, (value) => {
+  if (value) document.addEventListener('keydown', onKeydown);
+  else document.removeEventListener('keydown', onKeydown);
+});
+
+onMounted(() => document.addEventListener('click', onDocumentClick));
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('keydown', onKeydown);
+});
+</script>

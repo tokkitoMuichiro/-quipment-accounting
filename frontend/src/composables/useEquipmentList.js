@@ -1,26 +1,17 @@
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
-import { categoryQueryParam, searchBlob } from '../utils/format';
+import { useDocsSyncStore } from '../stores/docsSync';
+import { useItemFilters } from './useItemFilters';
+import { categoryQueryParam } from '../utils/format';
 
 export function useEquipmentList({ scopeRef, warehouseIdRef, categoryRef } = {}) {
   const auth = useAuthStore();
+  const docsSync = useDocsSyncStore();
   const items = ref([]);
-  const query = ref('');
-  const condition = ref('');
   const error = ref('');
   const loading = ref(false);
-
-  const filtered = computed(() => {
-    const q = query.value.trim().toLowerCase();
-    const isCard = categoryRef?.value === 'CARD';
-    return items.value.filter((item) => {
-      const okQuery = !q || searchBlob(item).includes(q);
-      const okCond =
-        isCard || !condition.value || item.condition === condition.value;
-      return okQuery && okCond;
-    });
-  });
+  const filters = useItemFilters({ itemsRef: items, categoryRef });
 
   async function load() {
     loading.value = true;
@@ -53,17 +44,19 @@ export function useEquipmentList({ scopeRef, warehouseIdRef, categoryRef } = {})
 
   if (scopeRef) watch(scopeRef, load);
   if (categoryRef) watch(categoryRef, load);
+  watch(
+    () => docsSync.nonce,
+    () => load(),
+  );
   onMounted(load);
 
   return {
     auth,
     items,
-    filtered,
-    query,
-    condition,
     error,
     loading,
     load,
     removeItem,
+    ...filters,
   };
 }
