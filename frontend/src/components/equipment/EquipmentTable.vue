@@ -156,7 +156,7 @@
         </tr>
       </tbody>
     </table>
-    <div v-else class="empty">Пока нет оборудования в этом списке.</div>
+    <div v-else class="empty">{{ emptyText }}</div>
   </div>
 </template>
 
@@ -191,6 +191,7 @@ import {
 defineProps({
   items: { type: Array, default: () => [] },
   category: { type: String, default: 'EQUIPMENT' },
+  emptyText: { type: String, default: 'Пока нет позиций в этом списке.' },
   selectable: { type: Boolean, default: false },
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },

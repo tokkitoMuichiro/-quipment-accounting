@@ -19,10 +19,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import './styles/AppLayout.scss';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useDocsSyncStore } from '../stores/docsSync';
 import { api } from '../api/client';
 import AppTopbar from '../components/layout/AppTopbar.vue';
 import AppSidebar from '../components/layout/AppSidebar.vue';
@@ -31,9 +32,14 @@ import EntryAlert from '../components/ui/EntryAlert.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
+const docsSync = useDocsSyncStore();
 const menuOpen = ref(false);
 const downloading = ref(false);
 const syncMsg = ref('');
+
+onMounted(() => {
+  docsSync.runOnce();
+});
 
 function logout() {
   auth.logout().then(() => router.push('/login'));

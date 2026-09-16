@@ -53,3 +53,20 @@ export const DOC_ALLOWED_MIME = new Set([
 ]);
 
 export const DOC_MAX_BYTES = 20 * 1024 * 1024;
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+export function guessMimeFromName(name: string): string {
+  const ext = String(name || '').split('.').pop()?.toLowerCase() || '';
+  return MIME_BY_EXTENSION[ext] || 'application/octet-stream';
+}

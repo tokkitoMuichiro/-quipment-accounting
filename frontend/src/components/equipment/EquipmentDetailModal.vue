@@ -37,18 +37,29 @@
         <p v-if="loading" class="muted">Загрузка списка…</p>
         <ul v-else-if="docs.length" class="eq-detail__files">
           <li v-for="doc in docs" :key="doc.id">
-            <button type="button" class="eq-detail__file" @click="onDownload(doc)">
+            <a
+              class="eq-detail__file"
+              href="#"
+              :title="`${doc.originalName} — ${formatSize(doc.sizeBytes)}`"
+              @click.prevent="onDownload(doc)"
+            >
               {{ doc.originalName }}
-              <span class="muted">{{ formatSize(doc.sizeBytes) }}</span>
-            </button>
+            </a>
             <button
               v-if="canUpload"
               type="button"
-              class="btn btn--ghost btn--small"
+              class="icon-btn icon-btn--danger eq-detail__file-remove"
               :disabled="busy"
+              aria-label="Удалить файл"
+              title="Удалить файл"
               @click="onDelete(doc)"
             >
-              Удалить
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z"
+                />
+              </svg>
             </button>
           </li>
         </ul>
@@ -58,7 +69,7 @@
           v-if="canUpload"
           v-model:files="pendingFiles"
           :disabled="busy"
-          title="Добавить документы"
+          title="Новые документы"
         />
         <button
           v-if="canUpload && pendingFiles.length"
@@ -147,6 +158,10 @@ async function loadDocs() {
   error.value = '';
   try {
     docs.value = await listDocuments(props.item.id);
+    // Бэкенд сверяет папку в Битриксе — флаг в списке может устареть.
+    if (docs.value.length > 0 !== Boolean(props.item.hasDocuments)) {
+      emit('updated');
+    }
   } catch (e) {
     error.value = e.message;
   } finally {

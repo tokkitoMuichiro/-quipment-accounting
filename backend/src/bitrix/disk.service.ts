@@ -10,9 +10,17 @@ import {
   ACCOUNTING_FOLDER_NAME,
   DOCS_FOLDER_NAME,
   equipmentFolderName,
+  guessMimeFromName,
 } from './document.constants';
 
-type PortalRow = {
+export type BitrixDiskFile = {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  mimeType: string;
+};
+
+export type PortalRow = {
   id: string;
   domain: string;
   accessToken: string;
@@ -85,6 +93,55 @@ export class DiskService {
       }
     }
     return children;
+  }
+
+  /** Subfolders of a folder as `name -> id`, used by the documents sync. */
+  async listSubfolders(
+    portal: PortalRow,
+    parentId: string,
+  ): Promise<Map<string, string>> {
+    const children = await this.listChildren(portal, parentId);
+    const map = new Map<string, string>();
+    for (const child of children) {
+      if (!this.isFolder(child)) continue;
+      const name = this.childName(child);
+      const id = this.childId(child);
+      if (name && id && !map.has(name)) {
+        map.set(name, id);
+      }
+    }
+    return map;
+  }
+
+  /** Files directly inside a folder; returns null when the folder is gone. */
+  async listFolderFiles(
+    portal: PortalRow,
+    folderId: string,
+  ): Promise<BitrixDiskFile[] | null> {
+    let children: Record<string, unknown>[];
+    try {
+      children = await this.listChildren(portal, folderId);
+    } catch (error) {
+      this.logger.warn(
+        `Не удалось прочитать папку Bitrix ${folderId}`,
+        error as Error,
+      );
+      return null;
+    }
+    return children
+      .filter((child) => !this.isFolder(child))
+      .map((child) => {
+        const name = this.childName(child) || 'document';
+        return {
+          id: this.childId(child),
+          name,
+          sizeBytes: Number(child.SIZE || child.size || 0) || 0,
+          mimeType: String(
+            child.CONTENT_TYPE || child.contentType || '',
+          ) || guessMimeFromName(name),
+        };
+      })
+      .filter((file) => Boolean(file.id));
   }
 
   async findOrCreateSubfolder(

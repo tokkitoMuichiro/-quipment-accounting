@@ -133,7 +133,7 @@
         </button>
       </div>
     </article>
-    <div v-if="!items.length" class="empty card">Пока нет оборудования в этом списке.</div>
+    <div v-if="!items.length" class="empty card">{{ emptyText }}</div>
   </div>
 </template>
 
@@ -161,6 +161,7 @@ import {
 defineProps({
   items: { type: Array, default: () => [] },
   category: { type: String, default: 'EQUIPMENT' },
+  emptyText: { type: String, default: 'Пока нет позиций в этом списке.' },
   selectable: { type: Boolean, default: false },
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },

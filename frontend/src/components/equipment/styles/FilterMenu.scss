@@ -1,0 +1,86 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
+.filter-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.filter-menu__btn {
+  position: relative;
+  width: $control-height;
+  height: $control-height;
+  min-height: $control-height;
+  padding: 0;
+  border: 1px solid $color-line;
+  border-radius: $radius;
+  background: $color-paper;
+  color: $color-muted;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-menu__btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.filter-menu__btn:hover {
+  background: $color-white-smoke;
+  color: $color-ink;
+}
+
+.filter-menu__btn.is-active {
+  border-color: $color-dodger;
+  color: $color-dodger;
+}
+
+.filter-menu__count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: $color-dodger;
+  color: $color-white;
+  font-size: $font-size-xs;
+  line-height: 16px;
+  text-align: center;
+}
+
+.filter-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: $z-dropdown;
+  width: 260px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid $color-line;
+  border-radius: $radius;
+  background: $color-paper;
+  box-shadow: $shadow-card;
+}
+
+.filter-menu__panel label {
+  display: grid;
+  gap: 4px;
+  font-size: $font-size-md;
+  color: $color-muted;
+}
+
+.filter-menu__panel select {
+  width: 100%;
+}
+
+@include mobile {
+  .filter-menu__panel {
+    width: min(78vw, 280px);
+  }
+}

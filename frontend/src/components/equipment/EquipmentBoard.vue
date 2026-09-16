@@ -3,6 +3,7 @@
     <EquipmentTable
       :items="items"
       :category="category"
+      :empty-text="emptyText"
       :selectable="selectable"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -24,6 +25,7 @@
     <EquipmentCards
       :items="items"
       :category="category"
+      :empty-text="emptyText"
       :selectable="selectable"
       :is-selected="isSelected"
       :all-selected="allSelected"
@@ -71,6 +73,7 @@ import { acceptTransfer, cancelPendingTransfer, confirmFill, flagFill } from '..
 defineProps({
   items: { type: Array, default: () => [] },
   category: { type: String, default: 'EQUIPMENT' },
+  emptyText: { type: String, default: 'Пока нет позиций в этом списке.' },
   selectable: { type: Boolean, default: false },
   isSelected: { type: Function, default: () => false },
   allSelected: { type: Boolean, default: false },

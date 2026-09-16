@@ -46,7 +46,11 @@ import {
   normalizeCardNumber,
   parseAssetCategory,
 } from './asset-helpers';
-import { normalizePlateNumber, isValidPlateNumber } from '../common/plate-number';
+import {
+  normalizePlateNumber,
+  isValidPlateNumber,
+  plateFormatHint,
+} from '../common/plate-number';
 
 const CONDITIONS_NEEDING_NOTE: Equipment['condition'][] = [
   'NEEDS_REPAIR',
@@ -184,11 +188,12 @@ export class EquipmentService {
     return parseAssetCategory(typeof raw === 'string' ? raw : undefined);
   }
 
-  private requirePlate(raw?: string | null): string {
-    if (!raw?.trim() || !isValidPlateNumber(raw)) {
-      throw new BadRequestException(
-        'Госномер: буква, 3 цифры, 2 буквы и регион (1–3 цифры), например A123BC77',
-      );
+  private requirePlate(
+    raw?: string | null,
+    vehicleKind?: string | null,
+  ): string {
+    if (!raw?.trim() || !isValidPlateNumber(raw, vehicleKind)) {
+      throw new BadRequestException(plateFormatHint(vehicleKind));
     }
     return normalizePlateNumber(raw);
   }
@@ -369,7 +374,7 @@ export class EquipmentService {
       if (!dto.vehicleKind) {
         throw new BadRequestException('Укажите вид ТС');
       }
-      const plateNumber = this.requirePlate(dto.plateNumber);
+      const plateNumber = this.requirePlate(dto.plateNumber, dto.vehicleKind);
       const condition = dto.condition || 'OK';
       return {
         category,
@@ -638,12 +643,15 @@ export class EquipmentService {
     let nextName = dto.name?.trim();
 
     if (item.category === 'VEHICLE' && canEditCard) {
-      if (dto.plateNumber !== undefined) {
-        nextPlate = this.requirePlate(dto.plateNumber);
-        nextFactory = nextPlate;
-      }
       if (dto.vehicleKind !== undefined) {
         nextVehicleKind = dto.vehicleKind;
+      }
+      if (dto.plateNumber !== undefined) {
+        nextPlate = this.requirePlate(dto.plateNumber, nextVehicleKind);
+        nextFactory = nextPlate;
+      } else if (nextVehicleKind !== item.vehicleKind) {
+        nextPlate = this.requirePlate(item.plateNumber, nextVehicleKind);
+        nextFactory = nextPlate;
       }
     }
     if (item.category === 'CARD' && canEditCard) {

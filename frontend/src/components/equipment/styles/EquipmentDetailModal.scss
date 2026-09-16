@@ -49,32 +49,39 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .eq-detail__files li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .eq-detail__file {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid $color-line;
-  border-radius: $radius;
-  background: $color-table-head;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
+  min-width: 0;
+  color: $color-dodger;
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .eq-detail__file:hover {
-  background: $color-row-hover;
+  color: $color-steel;
+}
+
+.eq-detail__file-remove {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+.eq-detail__file-remove svg {
+  width: 12px;
+  height: 12px;
 }
 
 @media (max-width: 640px) {

@@ -46,13 +46,42 @@
           <span class="people-filters__label">Сотрудник:</span>
           <strong>{{ selectedUserName }}</strong>
         </div>
-        <input v-model="query" placeholder="Поиск по названию или номеру" />
-        <select v-if="category !== 'CARD'" v-model="condition" aria-label="Состояние">
+        <input v-model="query" :placeholder="searchPlaceholder" />
+        <select v-if="category === 'EQUIPMENT'" v-model="condition" aria-label="Состояние">
           <option value="">Все состояния</option>
           <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
             {{ opt.label }}
           </option>
         </select>
+        <FilterMenu v-else :count="activeFilterCount" @reset="resetFilters">
+          <label v-if="category === 'VEHICLE'">
+            Вид транспорта
+            <select v-model="vehicleKind">
+              <option value="">Любой</option>
+              <option v-for="opt in VEHICLE_KIND_OPTIONS" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
+          <label v-if="category === 'VEHICLE'">
+            Состояние
+            <select v-model="condition">
+              <option value="">Любое</option>
+              <option v-for="opt in CONDITION_OPTIONS" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
+          <label v-if="category === 'CARD'">
+            Тип карты
+            <select v-model="cardKind">
+              <option value="">Любой</option>
+              <option v-for="opt in CARD_KIND_OPTIONS" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
+        </FilterMenu>
       </div>
 
       <p v-if="loading" class="muted">Загрузка…</p>
@@ -60,6 +89,7 @@
         v-if="!loading"
         :items="filtered"
         :category="category"
+        :empty-text="emptyText"
         :selectable="canSelect"
         :is-selected="isSelected"
         :all-selected="allSelected"
@@ -71,9 +101,6 @@
         @toggle-all="toggleAll"
         @updated="onEquipmentUpdated"
       />
-      <p v-if="!loading && !filtered.length" class="empty card">
-        У этого сотрудника нет позиций по текущему фильтру.
-      </p>
     </template>
 
     <SelectionBar
@@ -105,27 +132,30 @@ import './styles/PeopleEquipmentView.scss';
 import { fetchUsers } from '../api/catalog';
 import { fetchEquipment, removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
+import { useDocsSyncStore } from '../stores/docsSync';
 import { useSelection } from '../composables/useSelection';
+import { useItemFilters } from '../composables/useItemFilters';
 import { canTransferItem } from '../utils/access';
 import {
+  CARD_KIND_OPTIONS,
   CONDITION_OPTIONS,
+  VEHICLE_KIND_OPTIONS,
   categoryFromRoute,
   categoryQueryParam,
-  searchBlob,
 } from '../utils/format';
 import PageHeader from '../components/ui/PageHeader.vue';
 import SelectionBar from '../components/ui/SelectionBar.vue';
 import EquipmentBoard from '../components/equipment/EquipmentBoard.vue';
 import EquipmentForm from '../components/equipment/EquipmentForm.vue';
 import TransferModal from '../components/equipment/TransferModal.vue';
+import FilterMenu from '../components/equipment/FilterMenu.vue';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const docsSync = useDocsSyncStore();
 const users = ref([]);
 const items = ref([]);
-const query = ref('');
-const condition = ref('');
 const error = ref('');
 const loading = ref(false);
 const usersLoading = ref(false);
@@ -162,15 +192,22 @@ const selectedUserName = computed(
   () => users.value.find((u) => u.id === userId.value)?.fullName || 'Сотрудник',
 );
 
-const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  return items.value.filter((item) => {
-    const okQuery = !q || searchBlob(item).includes(q);
-    const okCond =
-      category.value === 'CARD' || !condition.value || item.condition === condition.value;
-    return okQuery && okCond;
-  });
-});
+const {
+  query,
+  condition,
+  vehicleKind,
+  cardKind,
+  filtered,
+  activeFilterCount,
+  emptyText,
+  resetFilters,
+} = useItemFilters({ itemsRef: items, categoryRef: category });
+
+const searchPlaceholder = computed(() =>
+  category.value === 'VEHICLE'
+    ? 'Поиск по названию или госномеру'
+    : 'Поиск по названию или номеру',
+);
 
 const {
   selectedItems,
@@ -269,9 +306,14 @@ watch(userId, (id) => {
   router.replace({ query: next });
   clear();
   query.value = '';
-  condition.value = '';
+  resetFilters();
   load();
 });
+
+watch(
+  () => docsSync.nonce,
+  () => load(),
+);
 
 watch(category, async () => {
   userId.value = '';

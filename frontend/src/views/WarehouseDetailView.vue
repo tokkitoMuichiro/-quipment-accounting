@@ -73,6 +73,7 @@ import { useRoute } from 'vue-router';
 import { fetchWarehouse } from '../api/catalog';
 import { removeEquipment } from '../api/equipment';
 import { useAuthStore } from '../stores/auth';
+import { useDocsSyncStore } from '../stores/docsSync';
 import { useSelection } from '../composables/useSelection';
 import PageHeader from '../components/ui/PageHeader.vue';
 import SelectionBar from '../components/ui/SelectionBar.vue';
@@ -85,6 +86,7 @@ import { categoryQueryParam } from '../utils/format';
 
 const route = useRoute();
 const auth = useAuthStore();
+const docsSync = useDocsSyncStore();
 const warehouse = ref(null);
 const error = ref('');
 const loading = ref(false);
@@ -183,5 +185,10 @@ watch(
     load();
   },
   { immediate: true },
+);
+
+watch(
+  () => docsSync.nonce,
+  () => load(),
 );
 </script>

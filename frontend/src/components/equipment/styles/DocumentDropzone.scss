@@ -1,16 +1,19 @@
+@import '../../../styles/variables';
+@import '../../../styles/mixins';
+
 .doc-drop {
   display: grid;
   gap: 8px;
   padding: 14px;
-  border: 1px dashed var(--border, #c9d0d8);
-  border-radius: 10px;
-  background: var(--surface-2, #f6f8fa);
+  border: 1px dashed $color-line;
+  border-radius: $radius;
+  background: $color-table-head;
   text-align: center;
 }
 
 .doc-drop.is-drag {
-  border-color: var(--accent, #1f6feb);
-  background: color-mix(in srgb, var(--accent, #1f6feb) 8%, white);
+  border-color: $color-dodger;
+  background: $color-row-selected;
 }
 
 .doc-drop.is-disabled {
@@ -29,7 +32,7 @@
 
 .doc-drop__hint {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: $font-size-md;
 }
 
 .doc-drop__list {
@@ -38,21 +41,53 @@
   list-style: none;
   text-align: left;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .doc-drop__list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: var(--surface, #fff);
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: $radius;
+  background: $color-paper;
+  min-width: 0;
 }
 
 .doc-drop__name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.doc-drop__remove {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex-shrink: 0;
+}
+
+.doc-drop__remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+@include mobile {
+  .doc-drop {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    gap: 6px;
+  }
+
+  .doc-drop__pick {
+    width: 100%;
+    min-height: $control-height-sm;
+  }
+
+  .doc-drop__list li {
+    background: $color-table-head;
+  }
 }

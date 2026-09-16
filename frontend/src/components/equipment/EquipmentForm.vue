@@ -25,14 +25,6 @@
 
       <template v-else-if="category === 'VEHICLE'">
         <label>
-          Госномер
-          <input v-model="form.plateNumber" class="mono" required placeholder="A123BC77" />
-        </label>
-        <label>
-          Наименование
-          <input v-model="form.name" minlength="2" required />
-        </label>
-        <label>
           Вид ТС
           <select v-model="form.vehicleKind" required>
             <option disabled value="">Выберите</option>
@@ -40,6 +32,20 @@
               {{ opt.label }}
             </option>
           </select>
+        </label>
+        <label>
+          Госномер
+          <input
+            v-model="form.plateNumber"
+            class="mono"
+            required
+            :placeholder="platePlaceholder(form.vehicleKind)"
+          />
+          <span class="muted">{{ plateHint(form.vehicleKind) }}</span>
+        </label>
+        <label>
+          Наименование
+          <input v-model="form.name" minlength="2" required />
         </label>
       </template>
 
@@ -91,9 +97,11 @@
             placeholder="Что случилось, что сломалось, причина"
           />
         </label>
-        <div v-if="supportsDocs" class="desktop-only">
-          <DocumentDropzone v-model:files="pendingFiles" :disabled="saving" />
-        </div>
+        <DocumentDropzone
+          v-if="supportsDocs"
+          v-model:files="pendingFiles"
+          :disabled="saving"
+        />
       </template>
 
       <template v-if="!item && (category === 'CARD' || form.condition !== 'IN_REPAIR')">
@@ -143,6 +151,7 @@ import {
   VEHICLE_KIND_OPTIONS,
   conditionNeedsNote,
 } from '../../utils/format';
+import { isValidPlate, plateHint, platePlaceholder } from '../../utils/plate';
 
 const props = defineProps({
   item: { type: Object, default: null },
@@ -229,6 +238,10 @@ async function loadRefs() {
 loadRefs();
 
 async function submit() {
+  if (category.value === 'VEHICLE' && !isValidPlate(form.plateNumber, form.vehicleKind)) {
+    error.value = `Неверный госномер. ${plateHint(form.vehicleKind)}`;
+    return;
+  }
   saving.value = true;
   error.value = '';
   try {
