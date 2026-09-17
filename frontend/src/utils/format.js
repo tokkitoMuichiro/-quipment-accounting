@@ -127,6 +127,13 @@ export function formatDate(value) {
   return new Date(value).toLocaleString('ru-RU');
 }
 
+export function formatSize(bytes) {
+  if (bytes == null) return '';
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
 export function categoryFromRoute(metaCategory) {
   const value = (metaCategory || 'equipment').toLowerCase();
   if (value === 'vehicle' || value === 'vehicles') return 'VEHICLE';

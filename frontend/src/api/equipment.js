@@ -1,4 +1,7 @@
-import { api } from './client';
+import { api, apiUpload } from './client';
+
+export const DOC_MAX_BYTES = 50 * 1024 * 1024;
+export const DOC_MAX_LABEL = '50 МБ';
 
 export function fetchEquipment(query = '') {
   return api(`/equipment${query}`);
@@ -48,10 +51,10 @@ export function listDocuments(equipmentId) {
   return api(`/equipment/${equipmentId}/documents`);
 }
 
-export function uploadDocument(equipmentId, file) {
+export function uploadDocument(equipmentId, file, onProgress) {
   const body = new FormData();
   body.append('file', file);
-  return api(`/equipment/${equipmentId}/documents`, { method: 'POST', body });
+  return apiUpload(`/equipment/${equipmentId}/documents`, { body, onProgress });
 }
 
 export function downloadDocument(documentId) {

@@ -11,6 +11,7 @@ import { DiskService } from '../bitrix/disk.service';
 import {
   DOC_ALLOWED_MIME,
   DOC_MAX_BYTES,
+  DOC_MAX_LABEL,
   UploadedMemoryFile,
   decodeUploadFileName,
 } from '../bitrix/document.constants';
@@ -77,7 +78,7 @@ export class DocumentsService {
       throw new BadRequestException('Файл не передан');
     }
     if (file.size > DOC_MAX_BYTES) {
-      throw new BadRequestException('Файл больше 20 МБ');
+      throw new BadRequestException(`Файл больше ${DOC_MAX_LABEL}`);
     }
     if (!DOC_ALLOWED_MIME.has(file.mimetype)) {
       throw new BadRequestException(

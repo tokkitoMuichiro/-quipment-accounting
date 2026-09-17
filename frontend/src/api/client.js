@@ -28,6 +28,73 @@ async function parseError(res) {
   }
 }
 
+function onUnauthorized() {
+  setToken(null);
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
+  return new Error('Нужна авторизация');
+}
+
+/**
+ * Загрузка файла через XHR: fetch не отдаёт прогресс отправки,
+ * а документы бывают на десятки мегабайт.
+ */
+export function apiUpload(path, { body, onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api${path}`);
+    xhr.withCredentials = true;
+    const token = getToken();
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        onProgress(event.loaded / event.total);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        reject(onUnauthorized());
+        return;
+      }
+      if (xhr.status === 413) {
+        reject(
+          new Error(
+            'Файл не принял сервер: слишком большой. Уменьшите файл или обратитесь к администратору.',
+          ),
+        );
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(xhr.responseText ? JSON.parse(xhr.responseText) : null);
+        } catch {
+          resolve(null);
+        }
+        return;
+      }
+      let message = 'Ошибка загрузки файла';
+      try {
+        const data = JSON.parse(xhr.responseText);
+        const raw = data.message;
+        message = Array.isArray(raw) ? raw.join(', ') : raw || message;
+      } catch {
+        if (xhr.status >= 500) message = SERVER_DOWN;
+      }
+      reject(new Error(message));
+    };
+
+    xhr.onerror = () => reject(new Error('Не удалось отправить файл: нет связи с сервером'));
+    xhr.ontimeout = () => reject(new Error('Загрузка файла заняла слишком много времени'));
+
+    xhr.send(body);
+  });
+}
+
 export async function api(path, options = {}) {
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
@@ -54,11 +121,7 @@ export async function api(path, options = {}) {
   }
 
   if (res.status === 401) {
-    setToken(null);
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
-    }
-    throw new Error('Нужна авторизация');
+    throw onUnauthorized();
   }
 
   if (!res.ok) {

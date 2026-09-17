@@ -56,9 +56,22 @@
 }
 
 .doc-drop__name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.doc-drop__size {
+  flex-shrink: 0;
+  font-size: $font-size-sm;
+}
+
+.doc-drop__alert {
+  margin: 0;
+  text-align: left;
+  font-size: $font-size-md;
 }
 
 .doc-drop__remove {

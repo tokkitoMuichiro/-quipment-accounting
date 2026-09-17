@@ -128,6 +128,7 @@
         </label>
       </template>
 
+      <UploadProgress v-if="upload" :state="upload" />
       <p v-if="error" class="alert">{{ error }}</p>
       <div class="modal__actions">
         <button type="button" class="btn btn--ghost" @click="$emit('close')">Отмена</button>
@@ -142,6 +143,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import AppModal from '../ui/AppModal.vue';
 import ConditionSelect from './ConditionSelect.vue';
 import DocumentDropzone from './DocumentDropzone.vue';
+import UploadProgress from './UploadProgress.vue';
 import { canEditItemCard } from '../../utils/access';
 import { fetchUsers, fetchWarehouses } from '../../api/catalog';
 import { createEquipment, updateEquipment, uploadDocument } from '../../api/equipment';
@@ -166,6 +168,7 @@ const warehouses = ref([]);
 const saving = ref(false);
 const error = ref('');
 const pendingFiles = ref([]);
+const upload = ref(null);
 const canAssignAnyone = computed(
   () => auth.can('view_all') || auth.can('manage_warehouses') || auth.can('manage_roles'),
 );
@@ -308,15 +311,25 @@ async function submit() {
     }
 
     if (created?.id && pendingFiles.value.length) {
+      const queue = [...pendingFiles.value];
       const failed = [];
-      for (const file of pendingFiles.value) {
+      for (const [index, file] of queue.entries()) {
+        upload.value = {
+          name: file.name,
+          index: index + 1,
+          total: queue.length,
+          ratio: 0,
+        };
         try {
-          await uploadDocument(created.id, file);
+          await uploadDocument(created.id, file, (ratio) => {
+            if (upload.value) upload.value.ratio = ratio;
+          });
         } catch (e) {
           failed.push(file.name);
           error.value = e.message;
         }
       }
+      upload.value = null;
       pendingFiles.value = [];
       if (failed.length) {
         error.value = `Позиция создана, но не загрузились: ${failed.join(', ')}. Можно добавить в карточке позиции.`;

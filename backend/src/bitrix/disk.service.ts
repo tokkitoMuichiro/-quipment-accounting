@@ -304,28 +304,50 @@ export class DiskService {
     }
   }
 
+  /**
+   * Двухшаговая загрузка: сначала берём одноразовый uploadUrl, затем шлём файл
+   * multipart-запросом. Base64 в теле REST-вызова раздувает файл примерно на
+   * треть и на больших документах упирается в лимиты Битрикса.
+   */
   async uploadToFolder(
     portal: PortalRow,
     folderId: string,
     fileName: string,
     buffer: Buffer,
   ): Promise<string> {
-    const uploaded = await this.call(
+    const prepared = await this.call(
       portal,
       'disk.folder.uploadfile',
-      {
-        id: folderId,
-        data: { NAME: fileName },
-        fileContent: [fileName, buffer.toString('base64')],
-        generateUniqueName: true,
-      },
-      120_000,
+      { id: folderId, generateUniqueName: true },
+      60_000,
     );
+    const uploadUrl = String(
+      prepared.result?.uploadUrl || prepared.result?.UploadUrl || '',
+    );
+    const field = String(prepared.result?.field || 'file');
+    if (!uploadUrl) {
+      throw new ServiceUnavailableException(
+        'Битрикс не вернул ссылку для загрузки файла',
+      );
+    }
+
+    const form = new FormData();
+    form.append(field, new Blob([new Uint8Array(buffer)]), fileName);
+
+    const { data } = await axios.post(uploadUrl, form, {
+      timeout: 600_000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    if (data?.error) {
+      throw new ServiceUnavailableException(
+        `Битрикс отклонил файл: ${data.error_description || data.error}`,
+      );
+    }
+
     const fileId = String(
-      uploaded.result?.ID ||
-        uploaded.result?.id ||
-        uploaded.result?.FILE?.ID ||
-        '',
+      data?.result?.ID || data?.result?.id || data?.result?.FILE?.ID || '',
     );
     if (!fileId) {
       throw new ServiceUnavailableException(

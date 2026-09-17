@@ -80,6 +80,7 @@
         >
           {{ busy ? 'Загрузка…' : `Загрузить (${pendingFiles.length})` }}
         </button>
+        <UploadProgress v-if="upload" :state="upload" />
       </section>
 
       <p v-if="error" class="alert">{{ error }}</p>
@@ -102,6 +103,7 @@
 import { computed, onMounted, ref } from 'vue';
 import AppModal from '../ui/AppModal.vue';
 import DocumentDropzone from './DocumentDropzone.vue';
+import UploadProgress from './UploadProgress.vue';
 import './styles/EquipmentDetailModal.scss';
 import {
   deleteDocument,
@@ -112,6 +114,7 @@ import {
 import { useAuthStore } from '../../stores/auth';
 import {
   CONDITION_LABEL,
+  formatSize,
   identityColumnTitle,
   identityLabel,
   ownerLabel,
@@ -128,6 +131,7 @@ const docs = ref([]);
 const pendingFiles = ref([]);
 const loading = ref(false);
 const busy = ref(false);
+const upload = ref(null);
 const error = ref('');
 
 const supportsDocs = computed(
@@ -144,13 +148,6 @@ const categoryLabel = computed(() => {
   if (props.item.category === 'CARD') return 'Карта';
   return 'Оборудование';
 });
-
-function formatSize(bytes) {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes < 1024) return `${bytes} Б`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
-}
 
 async function loadDocs() {
   if (!supportsDocs.value) return;
@@ -203,19 +200,27 @@ async function uploadPending() {
   if (!pendingFiles.value.length) return;
   busy.value = true;
   error.value = '';
+  const queue = [...pendingFiles.value];
   try {
-    for (const file of pendingFiles.value) {
-      await uploadDocument(props.item.id, file);
+    for (const [index, file] of queue.entries()) {
+      upload.value = {
+        name: file.name,
+        index: index + 1,
+        total: queue.length,
+        ratio: 0,
+      };
+      await uploadDocument(props.item.id, file, (ratio) => {
+        if (upload.value) upload.value.ratio = ratio;
+      });
+      pendingFiles.value = pendingFiles.value.filter((item) => item !== file);
     }
-    pendingFiles.value = [];
-    await loadDocs();
-    emit('updated');
   } catch (e) {
     error.value = e.message;
+  } finally {
+    upload.value = null;
+    busy.value = false;
     await loadDocs();
     emit('updated');
-  } finally {
-    busy.value = false;
   }
 }
 

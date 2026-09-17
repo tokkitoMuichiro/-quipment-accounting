@@ -26,9 +26,11 @@
     >
       {{ buttonLabel }}
     </button>
+    <p v-if="tooBig" class="alert doc-drop__alert">{{ tooBig }}</p>
     <ul v-if="files.length" class="doc-drop__list">
       <li v-for="(file, idx) in files" :key="`${file.name}-${file.size}-${idx}`">
         <span class="doc-drop__name">{{ file.name }}</span>
+        <span class="muted doc-drop__size">{{ formatSize(file.size) }}</span>
         <button
           type="button"
           class="icon-btn icon-btn--danger doc-drop__remove"
@@ -52,6 +54,8 @@
 <script setup>
 import { ref } from 'vue';
 import './styles/DocumentDropzone.scss';
+import { DOC_MAX_BYTES, DOC_MAX_LABEL } from '../../api/equipment';
+import { formatSize } from '../../utils/format';
 
 const props = defineProps({
   files: { type: Array, default: () => [] },
@@ -60,13 +64,14 @@ const props = defineProps({
   buttonLabel: { type: String, default: 'Добавить документы' },
   hint: {
     type: String,
-    default: 'Перетащите файлы сюда или выберите с компьютера (PDF, JPG, PNG, DOC до 20 МБ)',
+    default: `Перетащите файлы сюда или выберите с компьютера (PDF, JPG, PNG, DOC до ${DOC_MAX_LABEL})`,
   },
 });
 
 const emit = defineEmits(['update:files']);
 const inputEl = ref(null);
 const dragging = ref(false);
+const tooBig = ref('');
 
 function onDrag(value) {
   dragging.value = value;
@@ -75,7 +80,13 @@ function onDrag(value) {
 function merge(incoming) {
   const list = Array.from(incoming || []).filter(Boolean);
   if (!list.length) return;
-  emit('update:files', [...props.files, ...list]);
+  const accepted = list.filter((file) => file.size <= DOC_MAX_BYTES);
+  const rejected = list.filter((file) => file.size > DOC_MAX_BYTES);
+  tooBig.value = rejected.length
+    ? `Не добавлены (больше ${DOC_MAX_LABEL}): ${rejected.map((f) => f.name).join(', ')}`
+    : '';
+  if (!accepted.length) return;
+  emit('update:files', [...props.files, ...accepted]);
 }
 
 function onPick(event) {

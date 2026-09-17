@@ -52,7 +52,9 @@ export const DOC_ALLOWED_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-export const DOC_MAX_BYTES = 20 * 1024 * 1024;
+export const DOC_MAX_BYTES = 50 * 1024 * 1024;
+
+export const DOC_MAX_LABEL = `${Math.round(DOC_MAX_BYTES / (1024 * 1024))} МБ`;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
