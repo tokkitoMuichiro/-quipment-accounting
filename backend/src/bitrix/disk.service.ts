@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   ACCOUNTING_FOLDER_NAME,
   DOCS_FOLDER_NAME,
-  equipmentFolderName,
+  equipmentFolderNameUnique,
   guessMimeFromName,
 } from './document.constants';
 
@@ -256,21 +256,24 @@ export class DiskService {
     },
   ): Promise<string> {
     if (equipment.bitrixFolderId) {
-      return equipment.bitrixFolderId;
-    }
-    const docsId = await this.ensureDocsFolder(portal);
-    const name = equipmentFolderName(equipment);
-    let folderId: string;
-    try {
-      folderId = await this.findOrCreateSubfolder(portal, docsId, name);
-    } catch (error) {
-      const fallback = `${name} ${equipment.id.slice(0, 8)}`.slice(0, 180);
+      const alive = await this.listFolderFiles(portal, equipment.bitrixFolderId);
+      if (alive !== null) {
+        return equipment.bitrixFolderId;
+      }
       this.logger.warn(
-        `Папка «${name}» не создалась, пробуем «${fallback}»`,
-        error as Error,
+        `Папка Bitrix ${equipment.bitrixFolderId} недоступна, создаём заново`,
       );
-      folderId = await this.findOrCreateSubfolder(portal, docsId, fallback);
+      await this.prisma.equipment.update({
+        where: { id: equipment.id },
+        data: { bitrixFolderId: null },
+      });
+      equipment.bitrixFolderId = null;
     }
+
+    const docsId = await this.ensureDocsFolder(portal);
+    // Уникальное имя — чтобы одноимённые позиции не делили одну папку.
+    const name = equipmentFolderNameUnique(equipment);
+    const folderId = await this.findOrCreateSubfolder(portal, docsId, name);
 
     await this.prisma.equipment.update({
       where: { id: equipment.id },
@@ -290,7 +293,7 @@ export class DiskService {
       category?: string | null;
     },
   ) {
-    const name = equipmentFolderName(equipment);
+    const name = equipmentFolderNameUnique(equipment);
     try {
       await this.call(portal, 'disk.folder.rename', {
         id: folderId,
@@ -404,6 +407,28 @@ export class DiskService {
         `Не удалось удалить файл Bitrix ${bitrixFileId}`,
         error as Error,
       );
+    }
+  }
+
+  /** true — файл есть; false — точно удалён; null — API недоступен. */
+  async fileExists(
+    portal: PortalRow,
+    bitrixFileId: string,
+  ): Promise<boolean | null> {
+    try {
+      const meta = await this.call(portal, 'disk.file.get', { id: bitrixFileId });
+      const id = String(meta.result?.ID || meta.result?.id || '');
+      return Boolean(id);
+    } catch (error) {
+      const message = String((error as Error)?.message || error || '');
+      if (/not found|ERROR_NOT_FOUND|200404/i.test(message)) {
+        return false;
+      }
+      this.logger.warn(
+        `Не удалось проверить файл Bitrix ${bitrixFileId}`,
+        error as Error,
+      );
+      return null;
     }
   }
 }

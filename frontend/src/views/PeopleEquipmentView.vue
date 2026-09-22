@@ -294,8 +294,10 @@ async function onEquipmentUpdated() {
   await Promise.all([load(), loadUsers()]);
 }
 
-async function onSaved() {
-  editItem.value = null;
+async function onSaved(result) {
+  if (!result?.keepOpen) {
+    editItem.value = null;
+  }
   transferItems.value = [];
   clear();
   await onEquipmentUpdated();

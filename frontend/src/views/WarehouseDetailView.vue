@@ -150,8 +150,10 @@ function closeForm() {
   editItem.value = null;
 }
 
-async function reload() {
-  closeForm();
+async function reload(result) {
+  if (!result?.keepOpen) {
+    closeForm();
+  }
   transferItems.value = [];
   clear();
   await load();
