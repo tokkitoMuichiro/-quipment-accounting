@@ -1,6 +1,7 @@
 import {
   decodeUploadFileName,
   equipmentFolderName,
+  equipmentFolderNameUnique,
 } from './document.constants';
 
 describe('equipmentFolderName', () => {
@@ -34,6 +35,18 @@ describe('equipmentFolderName', () => {
         category: 'EQUIPMENT',
       }),
     ).toBe('Позиция abcdefgh');
+  });
+});
+
+describe('equipmentFolderNameUnique', () => {
+  it('appends short id so same-name items do not collide', () => {
+    expect(
+      equipmentFolderNameUnique({
+        id: 'abcdefgh-1234',
+        name: 'Болт М8',
+        category: 'EQUIPMENT',
+      }),
+    ).toBe('Болт М8 abcdefgh');
   });
 });
 

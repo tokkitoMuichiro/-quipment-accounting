@@ -20,6 +20,11 @@
   margin-bottom: 12px;
 }
 
+.alert--ok {
+  background: $color-ok-bg;
+  color: $color-ok;
+}
+
 .empty {
   padding: 40px 20px;
   text-align: center;

@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AssetCategory } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { DiskService } from '../bitrix/disk.service';
-import { equipmentFolderName } from '../bitrix/document.constants';
+import { DiskService, PortalRow } from '../bitrix/disk.service';
+import {
+  equipmentFolderName,
+  equipmentFolderNameUnique,
+} from '../bitrix/document.constants';
 import { ExcelService } from '../excel/excel.service';
 import { diffDocuments, diffIsEmpty, RemoteFile } from './document-diff';
 
@@ -74,7 +77,8 @@ export class DocumentsSyncService {
     }
 
     const subfolders = await this.disk.listSubfolders(portal, docsFolderId);
-    const folderId = this.matchFolderId(
+    const folderId = await this.resolveFolderId(
+      portal,
       item,
       subfolders,
       new Set(subfolders.values()),
@@ -94,7 +98,7 @@ export class DocumentsSyncService {
     if (files === null) {
       return false;
     }
-    const changed = await this.applyFiles(item, files);
+    const changed = await this.applyFiles(item, files, portal);
     if (changed) {
       this.excel.scheduleSync();
     }
@@ -149,7 +153,12 @@ export class DocumentsSyncService {
     let changed = 0;
 
     await this.mapLimit(items, FOLDER_CONCURRENCY, async (item) => {
-      const folderId = this.matchFolderId(item, subfolders, knownFolderIds);
+      const folderId = await this.resolveFolderId(
+        portal,
+        item,
+        subfolders,
+        knownFolderIds,
+      );
       if (!folderId) {
         if (await this.applyMissingFolder(item)) changed += 1;
         return;
@@ -165,7 +174,7 @@ export class DocumentsSyncService {
       if (files === null) {
         return;
       }
-      if (await this.applyFiles(item, files)) changed += 1;
+      if (await this.applyFiles(item, files, portal)) changed += 1;
     });
 
     if (changed) {
@@ -183,7 +192,33 @@ export class DocumentsSyncService {
     if (item.bitrixFolderId && knownFolderIds.has(item.bitrixFolderId)) {
       return item.bitrixFolderId;
     }
-    return subfolders.get(equipmentFolderName(item)) || null;
+    const unique = equipmentFolderNameUnique(item);
+    const legacy = equipmentFolderName(item);
+    return subfolders.get(unique) || subfolders.get(legacy) || null;
+  }
+
+  /**
+   * Как matchFolderId, но если id папки есть в БД и не попал в listing
+   * родителя — проверяем папку напрямую, чтобы не стереть свежие загрузки.
+   */
+  private async resolveFolderId(
+    portal: PortalRow,
+    item: SyncableEquipment,
+    subfolders: Map<string, string>,
+    knownFolderIds: Set<string>,
+  ): Promise<string | null> {
+    const matched = this.matchFolderId(item, subfolders, knownFolderIds);
+    if (matched) {
+      return matched;
+    }
+    if (!item.bitrixFolderId) {
+      return null;
+    }
+    const files = await this.disk.listFolderFiles(portal, item.bitrixFolderId);
+    if (files === null) {
+      return null;
+    }
+    return item.bitrixFolderId;
   }
 
   /**
@@ -216,6 +251,8 @@ export class DocumentsSyncService {
    * The documents folder has no subfolder for this item, so its files are gone.
    * The stale folder id is dropped as well, otherwise the next upload would
    * target a folder that no longer exists.
+   * Never wipe when DB still has rows and we only failed to list — caller must
+   * resolve the folder via resolveFolderId first.
    */
   private async applyMissingFolder(item: SyncableEquipment): Promise<boolean> {
     const removed = await this.prisma.equipmentDocument.deleteMany({
@@ -234,6 +271,7 @@ export class DocumentsSyncService {
   private async applyFiles(
     item: SyncableEquipment,
     files: RemoteFile[],
+    portal: PortalRow,
   ): Promise<boolean> {
     const local = await this.prisma.equipmentDocument.findMany({
       where: { equipmentId: item.id },
@@ -244,6 +282,19 @@ export class DocumentsSyncService {
         sizeBytes: true,
       },
     });
+
+    // Пустой listing при локальных файлах часто бывает сразу после upload
+    // (лаг Битрикса) — не стираем БД, пока хотя бы один файл жив.
+    if (!files.length && local.length) {
+      const probe = await this.disk.fileExists(portal, local[0].bitrixFileId);
+      if (probe !== false) {
+        this.logger.warn(
+          `Папка позиции ${item.id} пуста в listing, но локальные документы есть — пропуск очистки`,
+        );
+        return false;
+      }
+    }
+
     const diff = diffDocuments(files, local);
 
     for (const file of diff.toAdd) {

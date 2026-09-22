@@ -1,7 +1,7 @@
 <template>
   <div
     class="modal-back"
-    @click.self="$emit('close')"
+    @click.self="onBackdrop"
   >
     <div
       ref="dialogRef"
@@ -25,12 +25,23 @@ import './styles/AppModal.scss';
 const props = defineProps({
   title: { type: String, default: '' },
   hint: { type: String, default: '' },
+  /** Пока true — нельзя закрыть кликом снаружи или Escape. */
+  locked: { type: Boolean, default: false },
 });
 const emit = defineEmits(['close']);
 
 const dialogRef = ref(null);
 const titleId = `modal-title-${Math.random().toString(36).slice(2, 9)}`;
 let previousActive = null;
+
+function requestClose() {
+  if (props.locked) return;
+  emit('close');
+}
+
+function onBackdrop() {
+  requestClose();
+}
 
 function focusable() {
   const root = dialogRef.value;
@@ -45,7 +56,7 @@ function focusable() {
 function onKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault();
-    emit('close');
+    requestClose();
     return;
   }
   if (event.key !== 'Tab') return;

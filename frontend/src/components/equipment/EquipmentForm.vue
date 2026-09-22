@@ -169,6 +169,8 @@ const saving = ref(false);
 const error = ref('');
 const pendingFiles = ref([]);
 const upload = ref(null);
+/** После создания позиции с ошибкой загрузки — не создаём дубликат при Retry. */
+const createdId = ref(null);
 const canAssignAnyone = computed(
   () => auth.can('view_all') || auth.can('manage_warehouses') || auth.can('manage_roles'),
 );
@@ -270,6 +272,8 @@ async function submit() {
           quantity: form.type === 'CONSUMABLE' ? form.quantity : 1,
         });
       }
+    } else if (createdId.value) {
+      created = { id: createdId.value };
     } else if (category.value === 'VEHICLE') {
       created = await createEquipment({
         category: 'VEHICLE',
@@ -283,6 +287,7 @@ async function submit() {
         ownerWarehouseId:
           form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
+      createdId.value = created?.id || null;
     } else if (category.value === 'CARD') {
       created = await createEquipment({
         category: 'CARD',
@@ -294,6 +299,7 @@ async function submit() {
         ownerWarehouseId:
           form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
+      createdId.value = created?.id || null;
     } else {
       created = await createEquipment({
         category: 'EQUIPMENT',
@@ -308,6 +314,7 @@ async function submit() {
         ownerWarehouseId:
           form.ownerType === 'WAREHOUSE' ? form.ownerWarehouseId : undefined,
       });
+      createdId.value = created?.id || null;
     }
 
     if (created?.id && pendingFiles.value.length) {
@@ -324,19 +331,20 @@ async function submit() {
           await uploadDocument(created.id, file, (ratio) => {
             if (upload.value) upload.value.ratio = ratio;
           });
+          pendingFiles.value = pendingFiles.value.filter((item) => item !== file);
         } catch (e) {
           failed.push(file.name);
           error.value = e.message;
         }
       }
       upload.value = null;
-      pendingFiles.value = [];
       if (failed.length) {
-        error.value = `Позиция создана, но не загрузились: ${failed.join(', ')}. Можно добавить в карточке позиции.`;
-        emit('saved');
+        error.value = `Позиция создана, но не загрузились: ${failed.join(', ')}. Нажмите «Сохранить» ещё раз или добавьте файлы в карточке позиции.`;
+        emit('saved', { keepOpen: true });
         return;
       }
     }
+    createdId.value = null;
     emit('saved');
   } catch (e) {
     error.value = e.message;

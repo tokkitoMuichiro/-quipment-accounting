@@ -19,6 +19,22 @@ export function equipmentFolderName(input: {
   return `Позиция ${input.id.slice(0, 8)}`;
 }
 
+/** Уникальное имя папки: без коллизий у одноимённых расходников. */
+export function equipmentFolderNameUnique(input: {
+  id: string;
+  name: string;
+  factoryNumber?: string | null;
+  plateNumber?: string | null;
+  category?: string | null;
+}): string {
+  const primary = equipmentFolderName(input);
+  const suffix = input.id.slice(0, 8);
+  if (primary.endsWith(suffix)) {
+    return primary.slice(0, 180);
+  }
+  return `${primary} ${suffix}`.slice(0, 180);
+}
+
 export function decodeUploadFileName(raw: string): string {
   const name = String(raw || '').trim();
   if (!name) return 'document';

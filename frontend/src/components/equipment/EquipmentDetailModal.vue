@@ -1,5 +1,10 @@
 <template>
-  <AppModal :title="item?.name || 'Позиция'" hint="Документы хранятся в Битрикс" @close="$emit('close')">
+  <AppModal
+    :title="item?.name || 'Позиция'"
+    hint="Документы хранятся в Битрикс"
+    :locked="busy"
+    @close="$emit('close')"
+  >
     <div class="eq-detail form-grid">
       <dl class="eq-detail__meta">
         <div class="eq-detail__row">
@@ -83,13 +88,22 @@
         <UploadProgress v-if="upload" :state="upload" />
       </section>
 
+      <p v-if="success" class="alert alert--ok">{{ success }}</p>
       <p v-if="error" class="alert">{{ error }}</p>
       <div class="modal__actions">
-        <button type="button" class="btn btn--ghost" @click="$emit('close')">Закрыть</button>
+        <button
+          type="button"
+          class="btn btn--ghost"
+          :disabled="busy"
+          @click="$emit('close')"
+        >
+          Закрыть
+        </button>
         <button
           v-if="canEdit"
           type="button"
           class="btn btn--accent"
+          :disabled="busy"
           @click="$emit('edit', item)"
         >
           Изменить
@@ -133,14 +147,13 @@ const loading = ref(false);
 const busy = ref(false);
 const upload = ref(null);
 const error = ref('');
+const success = ref('');
 
 const supportsDocs = computed(
   () => props.item.category === 'EQUIPMENT' || props.item.category === 'VEHICLE',
 );
 const canUpload = computed(
-  () =>
-    supportsDocs.value &&
-    (canEditDocumentsItem(auth, props.item) || canEditItemCard(auth, props.item)),
+  () => supportsDocs.value && canEditDocumentsItem(auth, props.item),
 );
 const canEdit = computed(() => canEditItemCard(auth, props.item));
 const categoryLabel = computed(() => {
@@ -149,10 +162,15 @@ const categoryLabel = computed(() => {
   return 'Оборудование';
 });
 
-async function loadDocs() {
+function clearFeedback() {
+  error.value = '';
+  success.value = '';
+}
+
+async function loadDocs({ quiet = false } = {}) {
   if (!supportsDocs.value) return;
   loading.value = true;
-  error.value = '';
+  if (!quiet) clearFeedback();
   try {
     docs.value = await listDocuments(props.item.id);
     // Бэкенд сверяет папку в Битриксе — флаг в списке может устареть.
@@ -161,13 +179,14 @@ async function loadDocs() {
     }
   } catch (e) {
     error.value = e.message;
+    success.value = '';
   } finally {
     loading.value = false;
   }
 }
 
 async function onDownload(doc) {
-  error.value = '';
+  clearFeedback();
   try {
     const blob = await downloadDocument(doc.id);
     const url = URL.createObjectURL(blob);
@@ -184,10 +203,11 @@ async function onDownload(doc) {
 async function onDelete(doc) {
   if (!window.confirm(`Удалить «${doc.originalName}» из Битрикс?`)) return;
   busy.value = true;
-  error.value = '';
+  clearFeedback();
   try {
     await deleteDocument(doc.id);
-    await loadDocs();
+    await loadDocs({ quiet: true });
+    success.value = `Файл «${doc.originalName}» удалён`;
     emit('updated');
   } catch (e) {
     error.value = e.message;
@@ -199,8 +219,9 @@ async function onDelete(doc) {
 async function uploadPending() {
   if (!pendingFiles.value.length) return;
   busy.value = true;
-  error.value = '';
+  clearFeedback();
   const queue = [...pendingFiles.value];
+  let uploaded = 0;
   try {
     for (const [index, file] of queue.entries()) {
       upload.value = {
@@ -213,14 +234,28 @@ async function uploadPending() {
         if (upload.value) upload.value.ratio = ratio;
       });
       pendingFiles.value = pendingFiles.value.filter((item) => item !== file);
+      uploaded += 1;
     }
   } catch (e) {
     error.value = e.message;
   } finally {
     upload.value = null;
     busy.value = false;
-    await loadDocs();
+    await loadDocs({ quiet: true });
     emit('updated');
+    if (error.value) {
+      if (uploaded > 0) {
+        error.value = `Загружено ${uploaded} из ${queue.length}. ${error.value}`;
+      }
+    } else if (uploaded > 0 && !docs.value.length) {
+      error.value =
+        'Файлы отправлены, но в списке не появились. Обновите карточку или обратитесь к администратору.';
+    } else if (uploaded > 0) {
+      success.value =
+        uploaded === 1
+          ? 'Документ успешно загружен'
+          : `Успешно загружено файлов: ${uploaded}`;
+    }
   }
 }
 

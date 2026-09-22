@@ -178,8 +178,10 @@ function openTransfer(items) {
   transferItems.value = items;
 }
 
-function onSaved() {
-  closeForm();
+function onSaved(result) {
+  if (!result?.keepOpen) {
+    closeForm();
+  }
   transferItems.value = [];
   clear();
   load();
