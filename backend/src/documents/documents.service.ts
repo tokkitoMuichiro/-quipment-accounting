@@ -98,41 +98,77 @@ export class DocumentsService {
     }
 
     const portal = await this.disk.requirePortal();
-    const folderId = await this.disk.ensureEquipmentFolder(portal, item);
+    let folderId = await this.disk.ensureEquipmentFolder(portal, item);
     const safeName = decodeUploadFileName(file.originalname)
       .replace(/[\\/]+/g, '_')
       .slice(0, 180);
-    const bitrixFileId = await this.disk.uploadToFolder(
-      portal,
-      folderId,
-      safeName || 'document',
-      file.buffer,
-    );
 
-    const doc = await this.prisma.equipmentDocument.create({
-      data: {
-        equipmentId: item.id,
-        originalName: safeName || 'document',
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
-        bitrixFileId,
-        uploadedById: user.id,
-      },
-    });
+    let bitrixFileId: string;
+    try {
+      bitrixFileId = await this.disk.uploadToFolder(
+        portal,
+        folderId,
+        safeName || 'document',
+        file.buffer,
+      );
+    } catch (error) {
+      // Папка могла исчезнуть между проверкой и upload — один повтор с новой.
+      const message = String((error as Error)?.message || '');
+      if (/not found|ERROR_NOT_FOUND|2000404|folder/i.test(message)) {
+        this.logger.warn(
+          `Повтор загрузки в новую папку для ${item.id}: ${message}`,
+        );
+        await this.prisma.equipment.update({
+          where: { id: item.id },
+          data: { bitrixFolderId: null },
+        });
+        item.bitrixFolderId = null;
+        folderId = await this.disk.ensureEquipmentFolder(portal, item);
+        bitrixFileId = await this.disk.uploadToFolder(
+          portal,
+          folderId,
+          safeName || 'document',
+          file.buffer,
+        );
+      } else {
+        throw error;
+      }
+    }
 
-    await this.prisma.equipment.update({
-      where: { id: item.id },
-      data: { hasDocuments: true },
-    });
-    this.excel.scheduleSync();
+    try {
+      const doc = await this.prisma.equipmentDocument.create({
+        data: {
+          equipmentId: item.id,
+          originalName: safeName || 'document',
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          bitrixFileId,
+          uploadedById: user.id,
+        },
+      });
 
-    return {
-      id: doc.id,
-      originalName: doc.originalName,
-      mimeType: doc.mimeType,
-      sizeBytes: doc.sizeBytes,
-      createdAt: doc.createdAt,
-    };
+      await this.prisma.equipment.update({
+        where: { id: item.id },
+        data: { hasDocuments: true },
+      });
+      this.excel.scheduleSync();
+
+      return {
+        id: doc.id,
+        originalName: doc.originalName,
+        mimeType: doc.mimeType,
+        sizeBytes: doc.sizeBytes,
+        createdAt: doc.createdAt,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Файл ${bitrixFileId} загружен в Битрикс, но не записан в БД`,
+        error as Error,
+      );
+      throw new BadRequestException(
+        'Файл принят Битрикс, но не сохранился в учёте. Попробуйте ещё раз или обратитесь к администратору.',
+      );
+    }
   }
 
   async download(documentId: string, user: AuthUser) {

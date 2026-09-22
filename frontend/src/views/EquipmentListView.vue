@@ -63,7 +63,7 @@
       @remove="removeItem"
       @toggle="toggle"
       @toggle-all="toggleAll"
-      @updated="load"
+      @updated="() => load({ silent: true })"
     />
     <SelectionBar
       :count="selectedItems.length"

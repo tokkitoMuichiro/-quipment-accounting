@@ -237,25 +237,31 @@ async function uploadPending() {
       uploaded += 1;
     }
   } catch (e) {
-    error.value = e.message;
+    error.value = e.message || 'Ошибка загрузки файла';
   } finally {
     upload.value = null;
     busy.value = false;
-    await loadDocs({ quiet: true });
-    emit('updated');
-    if (error.value) {
-      if (uploaded > 0) {
-        error.value = `Загружено ${uploaded} из ${queue.length}. ${error.value}`;
-      }
-    } else if (uploaded > 0 && !docs.value.length) {
-      error.value =
-        'Файлы отправлены, но в списке не появились. Обновите карточку или обратитесь к администратору.';
-    } else if (uploaded > 0) {
-      success.value =
-        uploaded === 1
-          ? 'Документ успешно загружен'
-          : `Успешно загружено файлов: ${uploaded}`;
+  }
+
+  if (error.value) {
+    if (uploaded > 0) {
+      error.value = `Загружено ${uploaded} из ${queue.length}. ${error.value}`;
+      await loadDocs({ quiet: true });
+      emit('updated');
     }
+    return;
+  }
+
+  await loadDocs({ quiet: true });
+  emit('updated');
+  if (uploaded > 0 && !docs.value.length) {
+    error.value =
+      'Файлы отправлены, но в списке не появились. Обновите карточку или обратитесь к администратору.';
+  } else if (uploaded > 0) {
+    success.value =
+      uploaded === 1
+        ? 'Документ успешно загружен'
+        : `Успешно загружено файлов: ${uploaded}`;
   }
 }
 

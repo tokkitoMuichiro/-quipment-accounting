@@ -13,9 +13,12 @@ export function useEquipmentList({ scopeRef, warehouseIdRef, categoryRef } = {})
   const loading = ref(false);
   const filters = useItemFilters({ itemsRef: items, categoryRef });
 
-  async function load() {
-    loading.value = true;
-    error.value = '';
+  async function load(options = {}) {
+    const silent = Boolean(options.silent);
+    if (!silent) {
+      loading.value = true;
+      error.value = '';
+    }
     try {
       const params = new URLSearchParams();
       if (scopeRef?.value === 'mine') params.set('scope', 'mine');
@@ -28,7 +31,9 @@ export function useEquipmentList({ scopeRef, warehouseIdRef, categoryRef } = {})
     } catch (e) {
       error.value = e.message;
     } finally {
-      loading.value = false;
+      if (!silent) {
+        loading.value = false;
+      }
     }
   }
 
@@ -46,7 +51,7 @@ export function useEquipmentList({ scopeRef, warehouseIdRef, categoryRef } = {})
   if (categoryRef) watch(categoryRef, load);
   watch(
     () => docsSync.nonce,
-    () => load(),
+    () => load({ silent: true }),
   );
   onMounted(load);
 

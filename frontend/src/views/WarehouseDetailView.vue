@@ -36,7 +36,7 @@
       @remove="removeItem"
       @toggle="toggle"
       @toggle-all="toggleAll"
-      @updated="load"
+      @updated="() => load({ silent: true })"
     />
     <SelectionBar
       :count="selectedItems.length"
@@ -118,9 +118,12 @@ const canTransferSelected = computed(
 const canStock = computed(() => canStockWarehouse(auth, id.value));
 const canSelect = computed(() => items.value.some((item) => canTransferItem(auth, item)));
 
-async function load() {
-  loading.value = true;
-  error.value = '';
+async function load(options = {}) {
+  const silent = Boolean(options.silent);
+  if (!silent) {
+    loading.value = true;
+    error.value = '';
+  }
   try {
     warehouse.value = await fetchWarehouse(
       id.value,
@@ -130,7 +133,9 @@ async function load() {
     warehouse.value = null;
     error.value = e.message;
   } finally {
-    loading.value = false;
+    if (!silent) {
+      loading.value = false;
+    }
   }
 }
 

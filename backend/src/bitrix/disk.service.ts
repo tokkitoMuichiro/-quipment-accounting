@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -58,7 +59,24 @@ export class DiskService {
     params: Record<string, unknown> = {},
     timeoutMs = 60_000,
   ) {
-    return this.bitrix.callWithPortal(portal, method, params, timeoutMs);
+    try {
+      return await this.bitrix.callWithPortal(portal, method, params, timeoutMs);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message = String(
+        (error as { bitrix?: { error_description?: string; error?: string } })
+          ?.bitrix?.error_description ||
+          (error as { bitrix?: { error?: string } })?.bitrix?.error ||
+          (error as Error)?.message ||
+          'Ошибка Битрикс',
+      );
+      this.logger.warn(`Bitrix ${method}: ${message}`);
+      throw new ServiceUnavailableException(
+        `Битрикс: ${message}`.slice(0, 300),
+      );
+    }
   }
 
   private childName(item: Record<string, unknown>): string {
@@ -334,14 +352,30 @@ export class DiskService {
       );
     }
 
-    const form = new FormData();
-    form.append(field, new Blob([new Uint8Array(buffer)]), fileName);
-
-    const { data } = await axios.post(uploadUrl, form, {
-      timeout: 600_000,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    });
+    let data: Record<string, unknown>;
+    try {
+      const form = new FormData();
+      form.append(field, new Blob([new Uint8Array(buffer)]), fileName);
+      const response = await axios.post(uploadUrl, form, {
+        timeout: 600_000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      data = response.data || {};
+    } catch (error) {
+      const message = String(
+        (error as { response?: { data?: { error_description?: string; error?: string } } })
+          ?.response?.data?.error_description ||
+          (error as { response?: { data?: { error?: string } } })?.response?.data
+            ?.error ||
+          (error as Error)?.message ||
+          'не удалось отправить файл',
+      );
+      this.logger.warn(`Bitrix upload POST failed: ${message}`);
+      throw new ServiceUnavailableException(
+        `Битрикс не принял файл: ${message}`.slice(0, 300),
+      );
+    }
 
     if (data?.error) {
       throw new ServiceUnavailableException(
@@ -349,8 +383,10 @@ export class DiskService {
       );
     }
 
+    const result = (data.result || {}) as Record<string, unknown>;
+    const nestedFile = (result.FILE || {}) as Record<string, unknown>;
     const fileId = String(
-      data?.result?.ID || data?.result?.id || data?.result?.FILE?.ID || '',
+      result.ID || result.id || nestedFile.ID || nestedFile.id || '',
     );
     if (!fileId) {
       throw new ServiceUnavailableException(

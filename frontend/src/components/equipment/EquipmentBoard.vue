@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import EquipmentTable from './EquipmentTable.vue';
 import EquipmentCards from './EquipmentCards.vue';
 import ConditionNoteModal from './ConditionNoteModal.vue';
@@ -70,7 +70,7 @@ import EquipmentDetailModal from './EquipmentDetailModal.vue';
 import './styles/EquipmentBoard.scss';
 import { acceptTransfer, cancelPendingTransfer, confirmFill, flagFill } from '../../api/equipment';
 
-defineProps({
+const props = defineProps({
   items: { type: Array, default: () => [] },
   category: { type: String, default: 'EQUIPMENT' },
   emptyText: { type: String, default: 'Пока нет позиций в этом списке.' },
@@ -85,6 +85,17 @@ const emit = defineEmits(['transfer', 'edit', 'remove', 'toggle', 'toggle-all', 
 const pending = ref(null);
 const detailItem = ref(null);
 const conditionNonce = ref(0);
+
+watch(
+  () => props.items,
+  (items) => {
+    if (!detailItem.value?.id) return;
+    const fresh = items.find((item) => item.id === detailItem.value.id);
+    if (fresh) {
+      detailItem.value = fresh;
+    }
+  },
+);
 
 function bumpNonce() {
   conditionNonce.value += 1;

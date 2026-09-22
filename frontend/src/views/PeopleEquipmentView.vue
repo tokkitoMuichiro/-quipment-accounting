@@ -254,14 +254,17 @@ async function loadUsers() {
   }
 }
 
-async function load() {
+async function load(options = {}) {
   if (!userId.value) {
     items.value = [];
     loading.value = false;
     return;
   }
-  error.value = '';
-  loading.value = true;
+  const silent = Boolean(options.silent);
+  if (!silent) {
+    error.value = '';
+    loading.value = true;
+  }
   try {
     const params = new URLSearchParams({
       ownerUserId: userId.value,
@@ -272,7 +275,9 @@ async function load() {
     error.value = e.message;
     items.value = [];
   } finally {
-    loading.value = false;
+    if (!silent) {
+      loading.value = false;
+    }
   }
 }
 
@@ -291,7 +296,7 @@ function openTransfer(list) {
 }
 
 async function onEquipmentUpdated() {
-  await Promise.all([load(), loadUsers()]);
+  await Promise.all([load({ silent: true }), loadUsers()]);
 }
 
 async function onSaved(result) {
