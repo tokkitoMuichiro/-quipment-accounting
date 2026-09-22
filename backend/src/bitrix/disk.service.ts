@@ -32,6 +32,12 @@ export type PortalRow = {
   excelFileId?: string | null;
 };
 
+function safeMultipartFileName(name: string): string {
+  return String(name || 'document')
+    .replace(/[\r\n"]+/g, '_')
+    .slice(0, 180);
+}
+
 @Injectable()
 export class DiskService {
   private readonly logger = new Logger(DiskService.name);
@@ -326,11 +332,60 @@ export class DiskService {
   }
 
   /**
-   * Двухшаговая загрузка: сначала берём одноразовый uploadUrl, затем шлём файл
-   * multipart-запросом. Base64 в теле REST-вызова раздувает файл примерно на
-   * треть и на больших документах упирается в лимиты Битрикса.
+   * Загрузка файла в папку Диска.
+   * До ~8 МБ — через fileContent (base64), как Excel-синк: надёжнее на REST.
+   * Крупнее — двухшагово через uploadUrl + multipart.
    */
   async uploadToFolder(
+    portal: PortalRow,
+    folderId: string,
+    fileName: string,
+    buffer: Buffer,
+  ): Promise<string> {
+    const safeName = fileName || 'document';
+    const base64Limit = 8 * 1024 * 1024;
+
+    if (buffer.length <= base64Limit) {
+      return this.uploadViaBase64(portal, folderId, safeName, buffer);
+    }
+    return this.uploadViaUrl(portal, folderId, safeName, buffer);
+  }
+
+  private extractUploadedFileId(data: Record<string, unknown>): string {
+    const result = (data.result || {}) as Record<string, unknown>;
+    const nestedFile = (result.FILE || {}) as Record<string, unknown>;
+    return String(
+      result.ID || result.id || nestedFile.ID || nestedFile.id || '',
+    );
+  }
+
+  private async uploadViaBase64(
+    portal: PortalRow,
+    folderId: string,
+    fileName: string,
+    buffer: Buffer,
+  ): Promise<string> {
+    const uploaded = await this.call(
+      portal,
+      'disk.folder.uploadfile',
+      {
+        id: folderId,
+        data: { NAME: fileName },
+        fileContent: [fileName, buffer.toString('base64')],
+        generateUniqueName: true,
+      },
+      180_000,
+    );
+    const fileId = this.extractUploadedFileId(uploaded);
+    if (!fileId) {
+      throw new ServiceUnavailableException(
+        'Битрикс не вернул ID загруженного файла',
+      );
+    }
+    return fileId;
+  }
+
+  private async uploadViaUrl(
     portal: PortalRow,
     folderId: string,
     fileName: string,
@@ -339,7 +394,11 @@ export class DiskService {
     const prepared = await this.call(
       portal,
       'disk.folder.uploadfile',
-      { id: folderId, generateUniqueName: true },
+      {
+        id: folderId,
+        data: { NAME: fileName },
+        generateUniqueName: true,
+      },
       60_000,
     );
     const uploadUrl = String(
@@ -354,21 +413,34 @@ export class DiskService {
 
     let data: Record<string, unknown>;
     try {
-      const form = new FormData();
-      form.append(field, new Blob([new Uint8Array(buffer)]), fileName);
-      const response = await axios.post(uploadUrl, form, {
+      // Ручной multipart надёжнее Blob+FormData на части Node/axios связок.
+      const boundary = `----BitrixUpload${Date.now()}`;
+      const header = Buffer.from(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${field}"; filename="${safeMultipartFileName(fileName)}"\r\n` +
+          `Content-Type: application/octet-stream\r\n\r\n`,
+        'utf8',
+      );
+      const footer = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
+      const body = Buffer.concat([header, buffer, footer]);
+      const response = await axios.post(uploadUrl, body, {
         timeout: 600_000,
         maxBodyLength: Infinity,
         maxContentLength: Infinity,
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': String(body.length),
+        },
+        validateStatus: (status) => status >= 200 && status < 300,
       });
-      data = response.data || {};
-    } catch (error) {
+      data = (response.data || {}) as Record<string, unknown>;
+    } catch (error: any) {
+      const payload = error?.response?.data;
       const message = String(
-        (error as { response?: { data?: { error_description?: string; error?: string } } })
-          ?.response?.data?.error_description ||
-          (error as { response?: { data?: { error?: string } } })?.response?.data
-            ?.error ||
-          (error as Error)?.message ||
+        payload?.error_description ||
+          payload?.error ||
+          (typeof payload === 'string' ? payload : '') ||
+          error?.message ||
           'не удалось отправить файл',
       );
       this.logger.warn(`Bitrix upload POST failed: ${message}`);
@@ -383,11 +455,7 @@ export class DiskService {
       );
     }
 
-    const result = (data.result || {}) as Record<string, unknown>;
-    const nestedFile = (result.FILE || {}) as Record<string, unknown>;
-    const fileId = String(
-      result.ID || result.id || nestedFile.ID || nestedFile.id || '',
-    );
+    const fileId = this.extractUploadedFileId(data);
     if (!fileId) {
       throw new ServiceUnavailableException(
         'Битрикс не вернул ID загруженного файла',

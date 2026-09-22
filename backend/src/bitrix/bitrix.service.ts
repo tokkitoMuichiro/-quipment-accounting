@@ -314,20 +314,36 @@ export class BitrixService {
     this.assertAllowedDomain(domain);
     const url = `https://${domain}/rest/${method}.json`;
     const body = this.toFormBody({ ...params, auth: accessToken });
-    const { data } = await axios.post(url, body, {
-      timeout: timeoutMs,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-      },
-    });
+    let data: Record<string, unknown>;
+    try {
+      const response = await axios.post(url, body, {
+        timeout: timeoutMs,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+      });
+      data = (response.data || {}) as Record<string, unknown>;
+    } catch (error: any) {
+      const payload = error?.response?.data;
+      if (payload?.error || payload?.error_description) {
+        const err = new Error(
+          payload.error_description || payload.error || error.message,
+        );
+        (err as any).bitrix = payload;
+        throw err;
+      }
+      throw error;
+    }
 
     if (data?.error) {
-      const err = new Error(data.error_description || data.error);
+      const err = new Error(
+        String(data.error_description || data.error),
+      );
       (err as any).bitrix = data;
       throw err;
     }
 
-    return data;
+    return data as any;
   }
 
   async refreshPortal(portal: {
