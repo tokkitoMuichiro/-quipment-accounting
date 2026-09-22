@@ -2,7 +2,18 @@ import {
   decodeUploadFileName,
   equipmentFolderName,
   equipmentFolderNameUnique,
+  sanitizeBitrixDiskName,
 } from './document.constants';
+
+describe('sanitizeBitrixDiskName', () => {
+  it('strips characters rejected by Bitrix Disk', () => {
+    expect(sanitizeBitrixDiskName('насос 2"/A:B?*.pdf')).toBe('насос 2 A B.pdf');
+  });
+
+  it('keeps normal names', () => {
+    expect(sanitizeBitrixDiskName('паспорт СТС.pdf')).toBe('паспорт СТС.pdf');
+  });
+});
 
 describe('equipmentFolderName', () => {
   it('builds equipment name with factory number', () => {
@@ -36,6 +47,17 @@ describe('equipmentFolderName', () => {
       }),
     ).toBe('Позиция abcdefgh');
   });
+
+  it('sanitizes illegal characters in equipment name', () => {
+    expect(
+      equipmentFolderName({
+        id: 'abcdefgh-1234',
+        name: 'Клапан DN50 3/4"',
+        factoryNumber: 'A:1',
+        category: 'EQUIPMENT',
+      }),
+    ).toBe('Клапан DN50 3 4 A 1');
+  });
 });
 
 describe('equipmentFolderNameUnique', () => {
@@ -58,5 +80,9 @@ describe('decodeUploadFileName', () => {
 
   it('keeps normal utf8 names', () => {
     expect(decodeUploadFileName('паспорт.pdf')).toBe('паспорт.pdf');
+  });
+
+  it('sanitizes illegal filename characters', () => {
+    expect(decodeUploadFileName('схема A/B:1?.pdf')).toBe('схема A_B 1.pdf');
   });
 });

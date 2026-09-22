@@ -100,7 +100,6 @@ export class DocumentsService {
     const portal = await this.disk.requirePortal();
     let folderId = await this.disk.ensureEquipmentFolder(portal, item);
     const safeName = decodeUploadFileName(file.originalname)
-      .replace(/[\\/]+/g, '_')
       .slice(0, 180);
 
     let bitrixFileId: string;

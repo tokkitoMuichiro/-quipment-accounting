@@ -1,6 +1,22 @@
 export const ACCOUNTING_FOLDER_NAME = 'Учет оборудования';
 export const DOCS_FOLDER_NAME = 'Документы';
 
+/**
+ * Имена на Диске Битрикс не принимают символы Windows-путей и управляющие.
+ * DISK_MO_28000 — «Название содержит недопустимые символы».
+ */
+export function sanitizeBitrixDiskName(raw: string, fallback = 'document'): string {
+  const cleaned = String(raw || '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/[<>:"/\\|?*#%&{}$!+=\[\];'@`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+\./g, '.')
+    .replace(/^[. ]+|[. ]+$/g, '')
+    .trim()
+    .slice(0, 180);
+  return cleaned.length >= 1 ? cleaned : fallback;
+}
+
 export function equipmentFolderName(input: {
   id: string;
   name: string;
@@ -12,7 +28,7 @@ export function equipmentFolderName(input: {
     input.category === 'VEHICLE'
       ? [input.name, input.plateNumber].filter(Boolean).join(' ')
       : [input.name, input.factoryNumber].filter(Boolean).join(' ');
-  const cleaned = base.replace(/\s+/g, ' ').trim();
+  const cleaned = sanitizeBitrixDiskName(base, '');
   if (cleaned.length >= 2) {
     return cleaned.slice(0, 180);
   }
@@ -32,24 +48,24 @@ export function equipmentFolderNameUnique(input: {
   if (primary.endsWith(suffix)) {
     return primary.slice(0, 180);
   }
-  return `${primary} ${suffix}`.slice(0, 180);
+  return sanitizeBitrixDiskName(`${primary} ${suffix}`, `Позиция ${suffix}`);
 }
 
 export function decodeUploadFileName(raw: string): string {
-  const name = String(raw || '').trim();
+  let name = String(raw || '').trim();
   if (!name) return 'document';
   // Multer/busboy часто отдаёт UTF-8 имя как Latin-1 («Ð¡Ð¢Ð¡…»).
   if (/[ÐÑ]/.test(name) || /Ã./.test(name)) {
     try {
       const fixed = Buffer.from(name, 'latin1').toString('utf8');
       if (fixed && !fixed.includes('\uFFFD')) {
-        return fixed;
+        name = fixed;
       }
     } catch {
       /* keep original */
     }
   }
-  return name;
+  return sanitizeBitrixDiskName(name.replace(/[\\/]+/g, '_'), 'document');
 }
 
 export type UploadedMemoryFile = {
